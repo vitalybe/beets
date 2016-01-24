@@ -52,8 +52,14 @@ def parser_to_click(parser, callback, **kwargs):
     for option in parser.option_list:
         params.append(option_to_click(option))
 
+    # Add a click argument to gobble up all of the positional arguments.
+    # (In optparse, these are not declared: it's entirely up to the
+    # application to handle the list of strings that are passed.)
+    params.append(click.Argument(['args'], nargs=-1))
+
     # Handle the callback and translate to the `optparse` arguments.
-    def shim_callback(*args, **opts):
+    def shim_callback(**kwargs):
+        args = kwargs.pop('args')
         print(args, kwargs)
         # callback(args, kwargs)
 
