@@ -43,6 +43,7 @@ from beets import config
 from beets.util import confit
 from beets.autotag import mb
 from beets.dbcore import query as db_query
+from beets.compat import optparse2click
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == b'win32':
@@ -1186,8 +1187,17 @@ class BeetsCLI(click.MultiCommand):
         rv = {}
 
         for command in subcommands:
-            if not isinstance(command, click.Command):
+            # FIXME EXPERIMENTAL!
+            # For compatibility, convert old optparse-based commands
+            # into Click commands.
+            if isinstance(command, Subcommand):
+                command = optparse2click.parser_to_click(
+                    command.parser,
+                    command.name,
+                    command.help,
+                )
                 continue
+
             assert isinstance(command, ClickSubcommand)
 
             rv[command.name] = command
