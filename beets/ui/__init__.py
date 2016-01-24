@@ -1201,10 +1201,13 @@ class BeetsCommand(click.MultiCommand):
             # For compatibility, convert old optparse-based commands
             # into Click commands.
             if isinstance(command, Subcommand):
+                def callback(opts, args):
+                    command.func(ctx.lib, opts, args)
                 command = optparse2click.parser_to_click(
                     command.parser,
-                    command.name,
-                    command.help,
+                    callback,
+                    name=command.name,
+                    help=command.help,
                 )
 
             rv[command.name] = command
