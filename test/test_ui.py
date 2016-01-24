@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -38,6 +39,7 @@ from beets.mediafile import MediaFile
 from beets import config
 from beets import plugins
 from beets.util.confit import ConfigError
+from beets import util
 
 
 class ListTest(unittest.TestCase):
@@ -593,6 +595,7 @@ class InputTest(_common.TestCase):
         self.assertEqual(album, u'\xc2me')
 
 
+@_common.slow_test()
 class ConfigTest(unittest.TestCase, TestHelper):
     def setUp(self):
         self.setup_beets()
@@ -1012,14 +1015,14 @@ class SummarizeItemsTest(_common.TestCase):
 
         i2 = deepcopy(self.item)
         summary = commands.summarize_items([self.item, i2], False)
-        self.assertEqual(summary, "2 items, F, 4kbps, 21:48, 1.9 KB")
+        self.assertEqual(summary, "2 items, F, 4kbps, 21:48, 1.9 KiB")
 
         i2.format = "G"
         summary = commands.summarize_items([self.item, i2], False)
-        self.assertEqual(summary, "2 items, F 1, G 1, 4kbps, 21:48, 1.9 KB")
+        self.assertEqual(summary, "2 items, F 1, G 1, 4kbps, 21:48, 1.9 KiB")
 
         summary = commands.summarize_items([self.item, i2, i2], False)
-        self.assertEqual(summary, "3 items, G 2, F 1, 4kbps, 32:42, 2.9 KB")
+        self.assertEqual(summary, "3 items, G 2, F 1, 4kbps, 32:42, 2.9 KiB")
 
 
 class PathFormatTest(_common.TestCase):
@@ -1034,6 +1037,7 @@ class PathFormatTest(_common.TestCase):
         self.assertEqual(pf[1:], default_formats)
 
 
+@_common.slow_test()
 class PluginTest(_common.TestCase):
     def test_plugin_command_from_pluginpath(self):
         config['pluginpath'] = [os.path.join(_common.RSRC, 'beetsplug')]
@@ -1041,17 +1045,12 @@ class PluginTest(_common.TestCase):
         ui._raw_main(['test'])
 
 
+@_common.slow_test()
 class CompletionTest(_common.TestCase):
     def test_completion(self):
         # Load plugin commands
         config['pluginpath'] = [os.path.join(_common.RSRC, 'beetsplug')]
         config['plugins'] = ['test']
-
-        test_script = os.path.join(
-            os.path.dirname(__file__), 'test_completion.sh'
-        )
-        bash_completion = os.path.abspath(os.environ.get(
-            'BASH_COMPLETION_SCRIPT', '/etc/bash_completion'))
 
         # Tests run in bash
         cmd = os.environ.get('BEETS_TEST_SHELL', '/bin/bash --norc').split()
@@ -1060,21 +1059,28 @@ class CompletionTest(_common.TestCase):
         tester = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE)
 
-        # Load bash_completion
-        try:
-            with open(bash_completion, 'r') as bash_completion:
-                tester.stdin.writelines(bash_completion)
-        except IOError:
+        # Load bash_completion library.
+        for path in commands.BASH_COMPLETION_PATHS:
+            if os.path.exists(util.syspath(path)):
+                bash_completion = path
+                break
+        else:
             self.skipTest('bash-completion script not found')
+        try:
+            with open(util.syspath(bash_completion), 'r') as f:
+                tester.stdin.writelines(f)
+        except IOError:
+            self.skipTest('could not read bash-completion script')
 
-        # Load complection script
+        # Load completion script.
         self.io.install()
         ui._raw_main(['completion'])
         completion_script = self.io.getoutput()
         self.io.restore()
         tester.stdin.writelines(completion_script)
 
-        # Load testsuite
+        # Load test suite.
+        test_script = os.path.join(_common.RSRC, 'test_completion.sh')
         with open(test_script, 'r') as test_script:
             tester.stdin.writelines(test_script)
         (out, err) = tester.communicate()
@@ -1127,6 +1133,32 @@ class CommonOptionsParserCliTest(unittest.TestCase, TestHelper):
         l = self.run_with_output('--format-item', 'foo',
                                  '--format-album', '$albumartist', 'ls', '-a')
         self.assertEqual(l, 'the album artist\n')
+
+    def test_help(self):
+        l = self.run_with_output('help')
+        self.assertIn('Usage:', l)
+
+        l = self.run_with_output('help', 'list')
+        self.assertIn('Usage:', l)
+
+        with self.assertRaises(ui.UserError):
+            self.run_command('help', 'this.is.not.a.real.command')
+
+    def test_stats(self):
+        l = self.run_with_output('stats')
+        self.assertIn('Approximate total size:', l)
+
+        # # Need to have more realistic library setup for this to work
+        # l = self.run_with_output('stats', '-e')
+        # self.assertIn('Total size:', l)
+
+    def test_version(self):
+        l = self.run_with_output('version')
+        self.assertIn('no plugins loaded', l)
+
+        # # Need to have plugin loaded
+        # l = self.run_with_output('version')
+        # self.assertIn('plugins: ', l)
 
 
 class CommonOptionsParserTest(unittest.TestCase, TestHelper):

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """Stupid tests that ensure logging works as expected"""
 from __future__ import (division, absolute_import, print_function,
                         unicode_literals)
@@ -10,6 +12,7 @@ from StringIO import StringIO
 import beets.logging as blog
 from beets import plugins, ui
 import beetsplug
+from test import _common
 from test._common import unittest, TestCase
 from test import helper
 
@@ -30,6 +33,9 @@ class LoggingTest(TestCase):
 
         l5 = l3.getChild("shalala")
         self.assertEqual(l5.__class__, blog.BeetsLogger)
+
+        l6 = blog.getLogger()
+        self.assertNotEqual(l1, l6)
 
     def test_str_format_logging(self):
         l = blog.getLogger("baz123")
@@ -158,6 +164,7 @@ class LoggingLevelTest(unittest.TestCase, helper.TestHelper):
         self.assertIn('dummy: debug import_stage', logs)
 
 
+@_common.slow_test()
 class ConcurrentEventsTest(TestCase, helper.TestHelper):
     """Similar to LoggingLevelTest but lower-level and focused on multiple
     events interaction. Since this is a bit heavy we don't do it in

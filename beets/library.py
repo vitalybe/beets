@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -19,12 +20,10 @@ from __future__ import (division, absolute_import, print_function,
 
 import os
 import sys
-import shlex
 import unicodedata
 import time
 import re
 from unidecode import unidecode
-import platform
 
 from beets import logging
 from beets.mediafile import MediaFile, MutagenError, UnreadableFileError
@@ -54,16 +53,19 @@ class PathQuery(dbcore.FieldQuery):
     escape_char = b'\\'
 
     def __init__(self, field, pattern, fast=True, case_sensitive=None):
-        """Create a path query.
+        """Create a path query. `pattern` must be a path, either to a
+        file or a directory.
 
         `case_sensitive` can be a bool or `None`, indicating that the
-        behavior should depend on the platform (the default).
+        behavior should depend on the filesystem.
         """
         super(PathQuery, self).__init__(field, pattern, fast)
 
-        # By default, the case sensitivity depends on the platform.
+        # By default, the case sensitivity depends on the filesystem
+        # that the query path is located on.
         if case_sensitive is None:
-            case_sensitive = platform.system() != 'Windows'
+            path = util.bytestring_path(util.normpath(pattern))
+            case_sensitive = beets.util.case_sensitive(path)
         self.case_sensitive = case_sensitive
 
         # Use a normalized-case pattern for case-insensitive matches.
@@ -84,17 +86,16 @@ class PathQuery(dbcore.FieldQuery):
         colon = query_part.find(':')
         if colon != -1:
             query_part = query_part[:colon]
-        return (os.sep in query_part
-                and os.path.exists(syspath(normpath(query_part))))
+        return (os.sep in query_part and
+                os.path.exists(syspath(normpath(query_part))))
 
     def match(self, item):
         path = item.path if self.case_sensitive else item.path.lower()
         return (path == self.file_path) or path.startswith(self.dir_path)
 
     def col_clause(self):
-        file_blob = buffer(self.file_path)
-
         if self.case_sensitive:
+            file_blob = buffer(self.file_path)
             dir_blob = buffer(self.dir_path)
             return '({0} = ?) || (substr({0}, 1, ?) = ?)'.format(self.field), \
                    (file_blob, len(dir_blob), dir_blob)
@@ -102,8 +103,11 @@ class PathQuery(dbcore.FieldQuery):
         escape = lambda m: self.escape_char + m.group(0)
         dir_pattern = self.escape_re.sub(escape, self.dir_path)
         dir_blob = buffer(dir_pattern + b'%')
-        return '({0} = ?) || ({0} LIKE ? ESCAPE ?)'.format(self.field), \
-               (file_blob, dir_blob, self.escape_char)
+        file_pattern = self.escape_re.sub(escape, self.file_path)
+        file_blob = buffer(file_pattern)
+        return '({0} LIKE ? ESCAPE ?) || ({0} LIKE ? ESCAPE ?)'.format(
+            self.field), (file_blob, self.escape_char, dir_blob,
+                          self.escape_char)
 
 
 # Library-specific field types.
@@ -182,6 +186,7 @@ class MusicalKey(types.String):
         for flat, sharp in self.ENHARMONIC.items():
             key = re.sub(flat, sharp, key)
         key = re.sub(r'[\W\s]+minor', 'm', key)
+        key = re.sub(r'[\W\s]+major', '', key)
         return key.capitalize()
 
     def normalize(self, key):
@@ -189,6 +194,28 @@ class MusicalKey(types.String):
             return None
         else:
             return self.parse(key)
+
+
+class DurationType(types.Float):
+    """Human-friendly (M:SS) representation of a time interval."""
+    query = dbcore.query.DurationQuery
+
+    def format(self, value):
+        if not beets.config['format_raw_length'].get(bool):
+            return beets.ui.human_seconds_short(value or 0.0)
+        else:
+            return value
+
+    def parse(self, string):
+        try:
+            # Try to format back hh:ss to seconds.
+            return util.raw_seconds_short(string)
+        except ValueError:
+            # Fall back to a plain float.
+            try:
+                return float(string)
+            except ValueError:
+                return self.null
 
 
 # Library-specific sort types.
@@ -422,7 +449,7 @@ class Item(LibModel):
         'original_day':         types.PaddedInt(2),
         'initial_key':          MusicalKey(),
 
-        'length':      types.FLOAT,
+        'length':      DurationType(),
         'bitrate':     types.ScaledInt(1000, u'kbps'),
         'format':      types.STRING,
         'samplerate':  types.ScaledInt(1000, u'kHz'),
@@ -478,15 +505,6 @@ class Item(LibModel):
         i.read(path)
         i.mtime = i.current_mtime()  # Initial mtime.
         return i
-
-    @classmethod
-    def get_fields(cls):
-        """Returns Item fields available for queries and format strings."""
-        plugin_fields = []
-        for plugin in plugins.find_plugins():
-            plugin_fields += plugin.template_fields.keys()
-        return (cls._fields.keys() + cls._getters().keys() +
-                cls._types.keys()), plugin_fields
 
     def __setitem__(self, key, value):
         """Set the item's value for a standard field or a flexattr.
@@ -612,20 +630,26 @@ class Item(LibModel):
             log.error("{0}", exc)
             return False
 
-    def try_sync(self, write=None):
-        """Synchronize the item with the database and the media file
-        tags, updating them with this object's current state.
+    def try_sync(self, write, move, with_album=True):
+        """Synchronize the item with the database and, possibly, updates its
+        tags on disk and its path (by moving the file).
 
-        By default, the current `path` for the item is used to write
-        tags. If `write` is `False`, no tags are written. If `write` is
-        a path, tags are written to that file instead.
+        `write` indicates whether to write new tags into the file. Similarly,
+        `move` controls whether the path should be updated. In the
+        latter case, files are *only* moved when they are inside their
+        library's directory (if any).
 
-        Similar to calling :meth:`write` and :meth:`store`.
+        Similar to calling :meth:`write`, :meth:`move`, and :meth:`store`
+        (conditionally).
         """
-        if write is True:
-            write = None
-        if write is not False:
-            self.try_write(path=write)
+        if write:
+            self.try_write()
+        if move:
+            # Check whether this file is inside the library directory.
+            if self._db and self._db.directory in util.ancestry(self.path):
+                log.debug('moving {0} to synchronize path',
+                          util.displayable_path(self.path))
+                self.move(with_album=with_album)
         self.store()
 
     # Files themselves.
@@ -910,15 +934,6 @@ class Album(LibModel):
         getters['albumtotal'] = Album._albumtotal
         return getters
 
-    @classmethod
-    def get_fields(cls):
-        """Returns Album fields available for queries and format strings."""
-        plugin_fields = []
-        for plugin in plugins.find_plugins():
-            plugin_fields += plugin.album_template_fields.keys()
-        return (cls._fields.keys() + cls._getters().keys() +
-                cls._types.keys()), plugin_fields
-
     def items(self):
         """Returns an iterable over the items associated with this
         album.
@@ -1099,15 +1114,18 @@ class Album(LibModel):
                         item[key] = value
                     item.store()
 
-    def try_sync(self, write=True):
-        """Synchronize the album and its items with the database and
-        their files by updating them with this object's current state.
+    def try_sync(self, write, move):
+        """Synchronize the album and its items with the database.
+        Optionally, also write any new tags into the files and update
+        their paths.
 
-        `write` indicates whether to write tags to the item files.
+        `write` indicates whether to write tags to the item files, and
+        `move` controls whether files (both audio and album art) are
+        moved.
         """
         self.store()
         for item in self.items():
-            item.try_sync(bool(write))
+            item.try_sync(write, move)
 
 
 # Query construction helpers.
@@ -1153,13 +1171,8 @@ def parse_query_string(s, model_cls):
     The string is split into components using shell-like syntax.
     """
     assert isinstance(s, unicode), "Query is not unicode: {0!r}".format(s)
-
-    # A bug in Python < 2.7.3 prevents correct shlex splitting of
-    # Unicode strings.
-    # http://bugs.python.org/issue6988
-    s = s.encode('utf8')
     try:
-        parts = [p.decode('utf8') for p in shlex.split(s)]
+        parts = util.shlex_split(s)
     except ValueError as exc:
         raise dbcore.InvalidQueryError(s, exc)
     return parse_query_parts(parts, model_cls)
@@ -1418,7 +1431,7 @@ class DefaultTemplateFunctions(object):
         # Find matching albums to disambiguate with.
         subqueries = []
         for key in keys:
-            value = getattr(album, key)
+            value = album.get(key, '')
             subqueries.append(dbcore.MatchQuery(key, value))
         albums = self.lib.albums(dbcore.AndQuery(subqueries))
 
@@ -1431,7 +1444,7 @@ class DefaultTemplateFunctions(object):
         # Find the first disambiguator that distinguishes the albums.
         for disambiguator in disam:
             # Get the value for each album for the current field.
-            disam_values = set([getattr(a, disambiguator) for a in albums])
+            disam_values = set([a.get(disambiguator, '') for a in albums])
 
             # If the set of unique values is equal to the number of
             # albums in the disambiguation set, we're done -- this is

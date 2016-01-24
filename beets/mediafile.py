@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -37,6 +38,7 @@ from __future__ import (division, absolute_import, print_function,
 
 import mutagen
 import mutagen.mp3
+import mutagen.id3
 import mutagen.oggopus
 import mutagen.oggvorbis
 import mutagen.mp4
@@ -215,9 +217,9 @@ def _sc_decode(soundcheck):
     # SoundCheck tags consist of 10 numbers, each represented by 8
     # characters of ASCII hex preceded by a space.
     try:
-        soundcheck = soundcheck.replace(' ', '').decode('hex')
+        soundcheck = soundcheck.replace(b' ', b'').decode('hex')
         soundcheck = struct.unpack(b'!iiiiiiiiii', soundcheck)
-    except (struct.error, TypeError, UnicodeEncodeError):
+    except (struct.error, TypeError):
         # SoundCheck isn't in the format we expect, so return default
         # values.
         return 0.0, 0.0
@@ -270,10 +272,23 @@ def _sc_encode(gain, peak):
 
 # Cover art and other images.
 
+def _wider_test_jpeg(data):
+    """Test for a jpeg file following the UNIX file implementation which
+    uses the magic bytes rather than just looking for the bytes b'JFIF'
+    or b'EXIF' at a fixed position.
+    """
+    if data[:2] == b'\xff\xd8':
+        return 'jpeg'
+
+
 def _image_mime_type(data):
     """Return the MIME type of the image data (a bytestring).
     """
-    kind = imghdr.what(None, h=data)
+    # This checks for a jpeg file with only the magic bytes (unrecognized by
+    # imghdr.what). imghdr.what returns none for that type of file, so
+    # _wider_test_jpeg is run in that case. It still returns None if it didn't
+    # match such a jpeg file.
+    kind = imghdr.what(None, h=data) or _wider_test_jpeg(data)
     if kind in ['gif', 'jpeg', 'png', 'tiff', 'bmp']:
         return 'image/{0}'.format(kind)
     elif kind == 'pgm':
@@ -733,19 +748,20 @@ class MP3DescStorageStyle(MP3StorageStyle):
         if self.key != 'USLT':
             value = [value]
 
-        # try modifying in place
+        # Try modifying in place.
         found = False
         for frame in frames:
             if frame.desc.lower() == self.description.lower():
                 frame.text = value
+                frame.encoding = mutagen.id3.Encoding.UTF8
                 found = True
 
-        # need to make a new frame?
+        # Try creating a new frame.
         if not found:
             frame = mutagen.id3.Frames[self.key](
                 desc=bytes(self.description),
                 text=value,
-                encoding=3
+                encoding=mutagen.id3.Encoding.UTF8,
             )
             if self.id3_lang:
                 frame.lang = self.id3_lang
@@ -1448,6 +1464,34 @@ class MediaFile(object):
                 yield property.decode('utf8')
 
     @classmethod
+    def _field_sort_name(cls, name):
+        """Get a sort key for a field name that determines the order
+        fields should be written in.
+
+        Fields names are kept unchanged, unless they are instances of
+        :class:`DateItemField`, in which case `year`, `month`, and `day`
+        are replaced by `date0`, `date1`, and `date2`, respectively, to
+        make them appear in that order.
+        """
+        if isinstance(cls.__dict__[name], DateItemField):
+            name = re.sub('year',  'date0', name)
+            name = re.sub('month', 'date1', name)
+            name = re.sub('day',   'date2', name)
+        return name
+
+    @classmethod
+    def sorted_fields(cls):
+        """Get the names of all writable metadata fields, sorted in the
+        order that they should be written.
+
+        This is a lexicographic order, except for instances of
+        :class:`DateItemField`, which are sorted in year-month-day
+        order.
+        """
+        for property in sorted(cls.fields(), key=cls._field_sort_name):
+            yield property
+
+    @classmethod
     def readable_fields(cls):
         """Get all metadata fields: the writable ones from
         :meth:`fields` and also other audio properties.
@@ -1483,7 +1527,7 @@ class MediaFile(object):
         the `MediaFile`. If a key has the value `None`, the
         corresponding property is deleted from the `MediaFile`.
         """
-        for field in self.fields():
+        for field in self.sorted_fields():
             if field in dict:
                 if dict[field] is None:
                     delattr(self, field)

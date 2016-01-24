@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Jakob Schnitzer.
+# Copyright 2016, Jakob Schnitzer.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -188,7 +189,7 @@ class ConvertPlugin(BeetsPlugin):
             })
 
         if pretend:
-            self._log.info(' '.join(args))
+            self._log.info(' '.join(ui.decargs(args)))
             return
 
         try:
@@ -291,6 +292,8 @@ class ConvertPlugin(BeetsPlugin):
             if self.config['embed']:
                 album = item.get_album()
                 if album and album.artpath:
+                    self._log.debug('embedding album art from {}',
+                                    util.displayable_path(album.artpath))
                     art.embed_item(self._log, item, album.artpath,
                                    itempath=converted)
 
@@ -394,15 +397,22 @@ class ConvertPlugin(BeetsPlugin):
         fmt = self.config['format'].get(unicode).lower()
         if should_transcode(item, fmt):
             command, ext = get_format()
+
+            # Create a temporary file for the conversion.
             tmpdir = self.config['tmpdir'].get()
             fd, dest = tempfile.mkstemp('.' + ext, dir=tmpdir)
-            dest = util.bytestring_path(dest)
             os.close(fd)
+            dest = util.bytestring_path(dest)
             _temp_files.append(dest)  # Delete the transcode later.
+
+            # Convert.
             try:
                 self.encode(command, item.path, dest)
             except subprocess.CalledProcessError:
                 return
+
+            # Change the newly-imported database entry to point to the
+            # converted file.
             item.path = dest
             item.write()
             item.read()  # Load new audio information data.

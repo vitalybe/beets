@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -24,7 +25,7 @@ import tempfile
 from string import Template
 import subprocess
 
-from beets import util, config, plugins, ui
+from beets import util, plugins, ui
 from beets.dbcore import types
 import pyechonest
 import pyechonest.song
@@ -464,7 +465,7 @@ class EchonestMetadataPlugin(plugins.BeetsPlugin):
 
     def commands(self):
         fetch_cmd = ui.Subcommand('echonest',
-                                  help='Fetch metadata from the EchoNest')
+                                  help='fetch metadata from The Echo Nest')
         fetch_cmd.parser.add_option(
             '-f', '--force', dest='force', action='store_true', default=False,
             help='(re-)download information from the EchoNest'
@@ -472,7 +473,7 @@ class EchonestMetadataPlugin(plugins.BeetsPlugin):
 
         def fetch_func(lib, opts, args):
             self.config.set_args(opts)
-            write = config['import']['write'].get(bool)
+            write = ui.should_write()
             for item in lib.items(ui.decargs(args)):
                 self._log.info(u'{0}', item)
                 if self.config['force'] or self.requires_update(item):

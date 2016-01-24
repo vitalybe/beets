@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Fabrice Laporte.
+# Copyright 2016, Fabrice Laporte.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -35,6 +36,7 @@ class FtInTitlePluginFunctional(unittest.TestCase, TestHelper):
     def _ft_add_item(self, path, artist, title, aartist):
         return self.add_item(path=path,
                              artist=artist,
+                             artist_sort=artist,
                              title=title,
                              albumartist=aartist)
 
@@ -48,6 +50,14 @@ class FtInTitlePluginFunctional(unittest.TestCase, TestHelper):
         self.run_command('ftintitle', '-d')
         item.load()
         self.assertEqual(item['artist'], u'Alice')
+        self.assertEqual(item['title'], u'Song 1')
+
+    def test_functional_not_found(self):
+        item = self._ft_add_item('/', u'Alice ft Bob', u'Song 1', u'George')
+        self.run_command('ftintitle', '-d')
+        item.load()
+        # item should be unchanged
+        self.assertEqual(item['artist'], u'Alice ft Bob')
         self.assertEqual(item['title'], u'Song 1')
 
     def test_functional_custom_format(self):
@@ -124,6 +134,11 @@ class FtInTitlePluginTest(unittest.TestCase):
                 'artist': 'Alice ft. Bob',
                 'album_artist': 'Bob',
                 'feat_part': 'Alice'
+            },
+            {
+                'artist': 'Alice ft. Carol',
+                'album_artist': 'Bob',
+                'feat_part': None
             },
         ]
 

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """Tests for the 'zero' plugin"""
 
 from __future__ import (division, absolute_import, print_function,
@@ -86,6 +88,23 @@ class ZeroPluginTest(unittest.TestCase, TestHelper):
         item.write()
         mediafile = MediaFile(item.path)
         self.assertEqual(item['year'], 2000)
+        self.assertIsNone(mediafile.year)
+
+    def test_change_database(self):
+        item = self.add_item_fixture(year=2000)
+        item.write()
+        mediafile = MediaFile(item.path)
+        self.assertEqual(2000, mediafile.year)
+
+        config['zero'] = {
+            'fields': ['year'],
+            'update_database': True,
+        }
+        self.load_plugins('zero')
+
+        item.write()
+        mediafile = MediaFile(item.path)
+        self.assertEqual(item['year'], 0)
         self.assertIsNone(mediafile.year)
 
     def test_album_art(self):

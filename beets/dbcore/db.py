@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -271,6 +272,13 @@ class Model(object):
         else:
             return base_keys
 
+    @classmethod
+    def all_keys(self):
+        """Get a list of available keys for objects of this type.
+        Includes fixed and computed fields.
+        """
+        return list(self._fields) + self._getters().keys()
+
     # Act like a dictionary.
 
     def update(self, values):
@@ -458,6 +466,11 @@ class Model(object):
             raise TypeError("_parse() argument must be a string")
 
         return cls._type(key).parse(string)
+
+    def set_parse(self, key, string):
+        """Set the object's key to a value represented by a string.
+        """
+        self[key] = self._parse(key, string)
 
 
 # Database controller and supporting interfaces.

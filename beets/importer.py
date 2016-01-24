@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -48,7 +49,6 @@ action = Enum('action',
 
 QUEUE_SIZE = 128
 SINGLE_ARTIST_THRESH = 0.25
-VARIOUS_ARTISTS = u'Various Artists'
 PROGRESS_KEY = 'tagprogress'
 HISTORY_KEY = 'taghistory'
 
@@ -186,7 +186,6 @@ class ImportSession(object):
         self.logger = self._setup_logging(loghandler)
         self.paths = paths
         self.query = query
-        self.seen_idents = set()
         self._is_resuming = dict()
 
         # Normalize the paths.
@@ -294,12 +293,15 @@ class ImportSession(object):
                 # Split directory tasks into one task for each album.
                 stages += [group_albums(self)]
 
+            # These stages either talk to the user to get a decision or,
+            # in the case of a non-autotagged import, just choose to
+            # import everything as-is. In *both* cases, these stages
+            # also add the music to the library database, so later
+            # stages need to read and write data from there.
             if self.config['autotag']:
                 stages += [lookup_candidates(self), user_query(self)]
             else:
                 stages += [import_asis(self)]
-
-            stages += [apply_choices(self)]
 
             # Plugin stages.
             for stage_func in plugins.import_stages():
@@ -432,6 +434,7 @@ class ImportTask(BaseImportTask):
         self.rec = None
         self.should_remove_duplicates = False
         self.is_album = True
+        self.search_ids = []  # user-supplied candidate IDs.
 
     def set_choice(self, choice):
         """Given an AlbumMatch or TrackMatch object or an action constant,
@@ -577,10 +580,12 @@ class ImportTask(BaseImportTask):
         return tasks
 
     def lookup_candidates(self):
-        """Retrieve and store candidates for this album.
+        """Retrieve and store candidates for this album. User-specified
+        candidate IDs are stored in self.search_ids: if present, the
+        initial lookup is restricted to only those IDs.
         """
         artist, album, candidates, recommendation = \
-            autotag.tag_album(self.items)
+            autotag.tag_album(self.items, search_ids=self.search_ids)
         self.cur_artist = artist
         self.cur_album = album
         self.candidates = candidates
@@ -612,7 +617,7 @@ class ImportTask(BaseImportTask):
         return duplicates
 
     def align_album_level_fields(self):
-        """Make the some album fields equal across `self.items`
+        """Make some album fields equal across `self.items`.
         """
         changes = {}
 
@@ -629,7 +634,7 @@ class ImportTask(BaseImportTask):
                 changes['comp'] = False
             else:
                 # VA.
-                changes['albumartist'] = VARIOUS_ARTISTS
+                changes['albumartist'] = config['va_name'].get(unicode)
                 changes['comp'] = True
 
         elif self.choice_flag == action.APPLY:
@@ -716,6 +721,7 @@ class ImportTask(BaseImportTask):
             if replaced_album:
                 self.album.added = replaced_album.added
                 self.album.update(replaced_album._values_flex)
+                self.album.artpath = replaced_album.artpath
                 self.album.store()
                 log.debug(
                     u'Reimported album: added {0}, flexible '
@@ -818,7 +824,8 @@ class SingletonImportTask(ImportTask):
             plugins.send('item_imported', lib=lib, item=item)
 
     def lookup_candidates(self):
-        candidates, recommendation = autotag.tag_item(self.item)
+        candidates, recommendation = autotag.tag_item(
+            self.item, search_ids=self.search_ids)
         self.candidates = candidates
         self.rec = recommendation
 
@@ -1243,6 +1250,11 @@ def lookup_candidates(session, task):
 
     plugins.send('import_task_start', session=session, task=task)
     log.debug(u'Looking up: {0}', displayable_path(task.paths))
+
+    # Restrict the initial lookup to IDs specified by the user via the -m
+    # option. Currently all the IDs are passed onto the tasks directly.
+    task.search_ids = session.config['search_ids'].as_str_seq()
+
     task.lookup_candidates()
 
 
@@ -1295,6 +1307,7 @@ def user_query(session, task):
         return pipeline.multiple(ipl.pull())
 
     resolve_duplicates(session, task)
+    apply_choice(session, task)
     return task
 
 
@@ -1303,12 +1316,13 @@ def resolve_duplicates(session, task):
     and ask the session to resolve this.
     """
     if task.choice_flag in (action.ASIS, action.APPLY):
-        ident = task.chosen_ident()
         found_duplicates = task.find_duplicates(session.lib)
-        if ident in session.seen_idents or found_duplicates:
+        if found_duplicates:
+            log.debug('found duplicates: {}'.format(
+                [o.id for o in found_duplicates]
+            ))
             session.resolve_duplicate(task, found_duplicates)
             session.log_choice(task, True)
-        session.seen_idents.add(ident)
 
 
 @pipeline.mutator_stage
@@ -1323,12 +1337,12 @@ def import_asis(session, task):
 
     log.info('{}', displayable_path(task.paths))
     task.set_choice(action.ASIS)
+    apply_choice(session, task)
 
 
-@pipeline.mutator_stage
-def apply_choices(session, task):
-    """A coroutine for applying changes to albums and singletons during
-    the autotag process.
+def apply_choice(session, task):
+    """Apply the task's choice to the Album or Item it contains and add
+    it to the library.
     """
     if task.skip:
         return
@@ -1408,7 +1422,8 @@ def group_albums(session):
         if task.skip:
             continue
         tasks = []
-        for _, items in itertools.groupby(task.items, group):
+        sorted_items = sorted(task.items, key=group)
+        for _, items in itertools.groupby(sorted_items, group):
             items = list(items)
             task = ImportTask(task.toppath, [i.path for i in items],
                               items)

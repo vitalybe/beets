@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -30,8 +31,8 @@ import traceback
 
 from beets import plugins
 from beets import ui
-from beets.util import normpath, plurality
 from beets import config
+from beets.util import normpath, plurality
 from beets import library
 
 
@@ -292,7 +293,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
             result = None
             if isinstance(obj, library.Item):
                 result = self.fetch_artist_genre(obj)
-            elif obj.albumartist != 'Various Artists':
+            elif obj.albumartist != config['va_name'].get(unicode):
                 result = self.fetch_album_artist_genre(obj)
             else:
                 # For "Various Artists", pick the most popular track genre.
@@ -336,7 +337,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         )
 
         def lastgenre_func(lib, opts, args):
-            write = config['import']['write'].get(bool)
+            write = ui.should_write()
             self.config.set_args(opts)
 
             for album in lib.albums(ui.decargs(args)):
@@ -411,7 +412,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
 
         # Filter by weight (optionally).
         if min_weight:
-            res = [el for el in res if (el.weight or 0) >= min_weight]
+            res = [el for el in res if (int(el.weight or 0)) >= min_weight]
 
         # Get strings from tags.
         res = [el.item.get_name().lower() for el in res]

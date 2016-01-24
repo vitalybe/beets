@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -71,7 +72,7 @@ class UserError(Exception):
     """
 
 
-# Utilities.
+# Encoding utilities.
 
 def _out_encoding():
     """Get the encoding to use for *outputting* strings to the console.
@@ -137,6 +138,45 @@ def print_(*strings, **kwargs):
 
     sys.stdout.write(txt)
 
+
+# Configuration wrappers.
+
+def _bool_fallback(a, b):
+    """Given a boolean or None, return the original value or a fallback.
+    """
+    if a is None:
+        assert isinstance(b, bool)
+        return b
+    else:
+        assert isinstance(a, bool)
+        return a
+
+
+def should_write(write_opt=None):
+    """Decide whether a command that updates metadata should also write
+    tags, using the importer configuration as the default.
+    """
+    return _bool_fallback(write_opt, config['import']['write'].get(bool))
+
+
+def should_move(move_opt=None):
+    """Decide whether a command that updates metadata should also move
+    files when they're inside the library, using the importer
+    configuration as the default.
+
+    Specifically, commands should move files after metadata updates only
+    when the importer is configured *either* to move *or* to copy files.
+    They should avoid moving files when the importer is configured not
+    to touch any filenames.
+    """
+    return _bool_fallback(
+        move_opt,
+        config['import']['move'].get(bool) or
+        config['import']['copy'].get(bool)
+    )
+
+
+# Input prompts.
 
 def input_(prompt=None):
     """Like `raw_input`, but decodes the result to a Unicode string.
@@ -328,13 +368,17 @@ def input_yn(prompt, require=False):
     return sel == 'y'
 
 
+# Human output formatting.
+
 def human_bytes(size):
     """Formats size, a number of bytes, in a human-readable way."""
-    suffices = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB', 'HB']
-    for suffix in suffices:
+    powers = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 'H']
+    unit = 'B'
+    for power in powers:
         if size < 1024:
-            return "%3.1f %s" % (size, suffix)
+            return "%3.1f %s%s" % (size, power, unit)
         size /= 1024.0
+        unit = 'iB'
     return "big"
 
 
@@ -373,14 +417,37 @@ def human_seconds_short(interval):
     return u'%i:%02i' % (interval // 60, interval % 60)
 
 
+# Colorization.
+
 # ANSI terminal colorization code heavily inspired by pygments:
 # http://dev.pocoo.org/hg/pygments-main/file/b2deea5b5030/pygments/console.py
 # (pygments is by Tim Hatch, Armin Ronacher, et al.)
 COLOR_ESCAPE = "\x1b["
-DARK_COLORS = ["black", "darkred", "darkgreen", "brown", "darkblue",
-               "purple", "teal", "lightgray"]
-LIGHT_COLORS = ["darkgray", "red", "green", "yellow", "blue",
-                "fuchsia", "turquoise", "white"]
+DARK_COLORS = {
+    "black": 0,
+    "darkred": 1,
+    "darkgreen": 2,
+    "brown": 3,
+    "darkyellow": 3,
+    "darkblue": 4,
+    "purple": 5,
+    "darkmagenta": 5,
+    "teal": 6,
+    "darkcyan": 6,
+    "lightgray": 7
+}
+LIGHT_COLORS = {
+    "darkgray": 0,
+    "red": 1,
+    "green": 2,
+    "yellow": 3,
+    "blue": 4,
+    "fuchsia": 5,
+    "magenta": 5,
+    "turquoise": 6,
+    "cyan": 6,
+    "white": 7
+}
 RESET_COLOR = COLOR_ESCAPE + "39;49;00m"
 
 # These abstract COLOR_NAMES are lazily mapped on to the actual color in COLORS
@@ -396,9 +463,9 @@ def _colorize(color, text):
     in DARK_COLORS or LIGHT_COLORS.
     """
     if color in DARK_COLORS:
-        escape = COLOR_ESCAPE + "%im" % (DARK_COLORS.index(color) + 30)
+        escape = COLOR_ESCAPE + "%im" % (DARK_COLORS[color] + 30)
     elif color in LIGHT_COLORS:
-        escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS.index(color) + 30)
+        escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS[color] + 30)
     else:
         raise ValueError('no such color %s', color)
     return escape + text + RESET_COLOR
@@ -764,6 +831,7 @@ class CommonOptionsParser(optparse.OptionParser, object):
         self.add_album_option()
         self.add_path_option()
         self.add_format_option()
+
 
 # Subcommand parsing infrastructure.
 #

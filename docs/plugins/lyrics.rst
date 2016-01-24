@@ -3,11 +3,12 @@ Lyrics Plugin
 
 The ``lyrics`` plugin fetches and stores song lyrics from databases on the Web.
 Namely, the current version of the plugin uses `Lyric Wiki`_, `Lyrics.com`_,
-`Musixmatch`_, and, optionally, the Google custom search API.
+`Musixmatch`_, `Genius.com`_, and, optionally, the Google custom search API.
 
 .. _Lyric Wiki: http://lyrics.wikia.com/
 .. _Lyrics.com: http://www.lyrics.com/
 .. _Musixmatch: https://www.musixmatch.com/
+.. _Genius.com: http://genius.com/
 
 
 Fetch Lyrics During Import
@@ -51,9 +52,10 @@ configuration file. The available options are:
   sources known to be scrapeable.
 - **sources**: List of sources to search for lyrics. An asterisk ``*`` expands
   to all available sources.
-  Default: ``google lyricwiki lyrics.com musixmatch``, i.e., all sources.
-  *google* source will be automatically deactivated if no ``google_API_key`` is
-  setup.
+  Default: ``google lyricwiki lyrics.com musixmatch genius``, i.e., all
+  sources.
+  The `google` source will be automatically deactivated if no
+  ``google_API_key`` is setup.
 
 Here's an example of ``config.yaml``::
 

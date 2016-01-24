@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Thomas Scholtes.
+# Copyright 2016, Thomas Scholtes.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -23,7 +24,6 @@ import subprocess
 from beets import ui
 from beets import util
 from beets.plugins import BeetsPlugin
-from beets import config
 
 
 class KeyFinderPlugin(BeetsPlugin):
@@ -46,8 +46,7 @@ class KeyFinderPlugin(BeetsPlugin):
         return [cmd]
 
     def command(self, lib, opts, args):
-        self.find_key(lib.items(ui.decargs(args)),
-                      write=config['import']['write'].get(bool))
+        self.find_key(lib.items(ui.decargs(args)), write=ui.should_write())
 
     def imported(self, session, task):
         self.find_key(task.items)

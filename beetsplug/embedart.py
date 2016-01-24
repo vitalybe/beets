@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -37,6 +38,7 @@ class EmbedCoverArtPlugin(BeetsPlugin):
             'auto': True,
             'compare_threshold': 0,
             'ifempty': False,
+            'remove_art_file': False
         })
 
         if self.config['maxwidth'].get(int) and not ArtResizer.shared.local:
@@ -77,6 +79,7 @@ class EmbedCoverArtPlugin(BeetsPlugin):
                 for album in lib.albums(decargs(args)):
                     art.embed_album(self._log, album, maxwidth, False,
                                     compare_threshold, ifempty)
+                    self.remove_artfile(album)
 
         embed_cmd.func = embed_func
 
@@ -126,8 +129,20 @@ class EmbedCoverArtPlugin(BeetsPlugin):
     def process_album(self, album):
         """Automatically embed art after art has been set
         """
-        if self.config['auto'] and config['import']['write']:
+        if self.config['auto'] and ui.should_write():
             max_width = self.config['maxwidth'].get(int)
             art.embed_album(self._log, album, max_width, True,
                             self.config['compare_threshold'].get(int),
                             self.config['ifempty'].get(bool))
+            self.remove_artfile(album)
+
+    def remove_artfile(self, album):
+        """Possibly delete the album art file for an album (if the
+        appropriate configuration option is enabled.
+        """
+        if self.config['remove_art_file'] and album.artpath:
+            if os.path.isfile(album.artpath):
+                self._log.debug('Removing album art file for {0}', album)
+                os.remove(album.artpath)
+                album.artpath = None
+                album.store()

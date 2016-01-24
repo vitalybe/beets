@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -43,11 +44,11 @@ class UtilTest(unittest.TestCase):
     @patch('beets.util.open_anything')
     def test_interactive_open(self, mock_open, mock_execlp):
         mock_open.return_value = 'tagada'
-        util.interactive_open('foo')
+        util.interactive_open(['foo'], util.open_anything())
         mock_execlp.assert_called_once_with('tagada', 'tagada', 'foo')
         mock_execlp.reset_mock()
 
-        util.interactive_open('foo', 'bar')
+        util.interactive_open(['foo'], 'bar')
         mock_execlp.assert_called_once_with('bar', 'bar', 'foo')
 
     def test_sanitize_unix_replaces_leading_dot(self):
@@ -107,7 +108,7 @@ class UtilTest(unittest.TestCase):
     def test_command_output(self, mock_popen):
         def popen_fail(*args, **kwargs):
             m = Mock(returncode=1)
-            m.communicate.return_value = None, None
+            m.communicate.return_value = 'foo', 'bar'
             return m
 
         mock_popen.side_effect = popen_fail

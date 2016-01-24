@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, David Hamp-Gonsalves
+# Copyright 2016, David Hamp-Gonsalves
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -25,6 +26,10 @@ from beets import util
 from os.path import relpath
 from tempfile import NamedTemporaryFile
 
+# Indicate where arguments should be inserted into the command string.
+# If this is missing, they're placed at the end.
+ARGS_MARKER = '$args'
+
 
 class PlayPlugin(BeetsPlugin):
 
@@ -35,6 +40,10 @@ class PlayPlugin(BeetsPlugin):
             'command': None,
             'use_folders': False,
             'relative_to': None,
+            'raw': False,
+            # Backwards compatibility. See #1803 and line 74
+            'warning_threshold': -2,
+            'warning_treshold': 100,
         })
 
     def commands(self):
@@ -43,18 +52,45 @@ class PlayPlugin(BeetsPlugin):
             help='send music to a player as a playlist'
         )
         play_command.parser.add_album_option()
+        play_command.parser.add_option(
+            '-A', '--args',
+            action='store',
+            help='add additional arguments to the command',
+        )
         play_command.func = self.play_music
         return [play_command]
 
     def play_music(self, lib, opts, args):
         """Execute query, create temporary playlist and execute player
-        command passing that playlist.
+        command passing that playlist, at request insert optional arguments.
         """
         command_str = config['play']['command'].get()
+        if not command_str:
+            command_str = util.open_anything()
         use_folders = config['play']['use_folders'].get(bool)
         relative_to = config['play']['relative_to'].get()
+        raw = config['play']['raw'].get(bool)
+        warning_threshold = config['play']['warning_threshold'].get(int)
+        # We use -2 as a default value for warning_threshold to detect if it is
+        # set or not. We can't use a falsey value because it would have an
+        # actual meaning in the configuration of this plugin, and we do not use
+        # -1 because some people might use it as a value to obtain no warning,
+        # which wouldn't be that bad of a practice.
+        if warning_threshold == -2:
+            # if warning_threshold has not been set by user, look for
+            # warning_treshold, to preserve backwards compatibility. See #1803.
+            # warning_treshold has the correct default value of 100.
+            warning_threshold = config['play']['warning_treshold'].get(int)
+
         if relative_to:
             relative_to = util.normpath(relative_to)
+
+        # Add optional arguments to the player command.
+        if opts.args:
+            if ARGS_MARKER in command_str:
+                command_str = command_str.replace(ARGS_MARKER, opts.args)
+            else:
+                command_str = "{} {}".format(command_str, opts.args)
 
         # Perform search by album and add folders rather than tracks to
         # playlist.
@@ -75,6 +111,8 @@ class PlayPlugin(BeetsPlugin):
         else:
             selection = lib.items(ui.decargs(args))
             paths = [item.path for item in selection]
+            if relative_to:
+                paths = [relpath(path, relative_to) for path in paths]
             item_type = 'track'
 
         item_type += 's' if len(selection) > 1 else ''
@@ -85,7 +123,7 @@ class PlayPlugin(BeetsPlugin):
             return
 
         # Warn user before playing any huge playlists.
-        if len(selection) > 100:
+        if warning_threshold and len(selection) > warning_threshold:
             ui.print_(ui.colorize(
                 'text_warning',
                 'You are about to queue {0} {1}.'.format(len(selection),
@@ -95,21 +133,25 @@ class PlayPlugin(BeetsPlugin):
             if ui.input_options(('Continue', 'Abort')) == 'a':
                 return
 
-        # Create temporary m3u file to hold our playlist.
-        m3u = NamedTemporaryFile('w', suffix='.m3u', delete=False)
-        for item in paths:
-            if relative_to:
-                m3u.write(relpath(item, relative_to) + b'\n')
-            else:
-                m3u.write(item + b'\n')
-        m3u.close()
-
         ui.print_(u'Playing {0} {1}.'.format(len(selection), item_type))
+        if raw:
+            open_args = paths
+        else:
+            open_args = [self._create_tmp_playlist(paths)]
 
+        self._log.debug('executing command: {} {}', command_str,
+                        b' '.join(open_args))
         try:
-            util.interactive_open(m3u.name, command_str)
+            util.interactive_open(open_args, command_str)
         except OSError as exc:
-            raise ui.UserError("Could not play the music playlist: "
+            raise ui.UserError("Could not play the query: "
                                "{0}".format(exc))
-        finally:
-            util.remove(m3u.name)
+
+    def _create_tmp_playlist(self, paths_list):
+        """Create a temporary .m3u file. Return the filename.
+        """
+        m3u = NamedTemporaryFile('w', suffix='.m3u', delete=False)
+        for item in paths_list:
+            m3u.write(item + b'\n')
+        m3u.close()
+        return m3u.name

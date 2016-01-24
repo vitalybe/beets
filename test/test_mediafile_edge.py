@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -77,6 +78,24 @@ class EdgeTest(unittest.TestCase):
     def test_old_ape_version_bitrate(self):
         f = beets.mediafile.MediaFile(os.path.join(_common.RSRC, 'oldape.ape'))
         self.assertEqual(f.bitrate, 0)
+
+    def test_only_magic_bytes_jpeg(self):
+        # Some jpeg files can only be recognized by their magic bytes and as
+        # such aren't recognized by imghdr. Ensure that this still works thanks
+        # to our own follow up mimetype detection based on
+        # https://github.com/file/file/blob/master/magic/Magdir/jpeg#L12
+        f = open(os.path.join(_common.RSRC, 'only-magic-bytes.jpg'), 'rb')
+        jpg_data = f.read()
+        self.assertEqual(
+            beets.mediafile._image_mime_type(jpg_data),
+            'image/jpeg')
+
+    def test_soundcheck_non_ascii(self):
+        # Make sure we don't crash when the iTunes SoundCheck field contains
+        # non-ASCII binary data.
+        f = beets.mediafile.MediaFile(os.path.join(_common.RSRC,
+                                                   'soundcheck-nonascii.m4a'))
+        self.assertEqual(f.rg_track_gain, 0.0)
 
 
 class InvalidValueToleranceTest(unittest.TestCase):
@@ -180,7 +199,7 @@ class SideEffectsTest(unittest.TestCase):
         self.assertEqual(old_mtime, new_mtime)
 
 
-class EncodingTest(unittest.TestCase, TestHelper):
+class MP4EncodingTest(unittest.TestCase, TestHelper):
     def setUp(self):
         self.create_temp_dir()
         src = os.path.join(_common.RSRC, 'full.m4a')
@@ -197,6 +216,26 @@ class EncodingTest(unittest.TestCase, TestHelper):
         self.mf.save()
         new_mf = beets.mediafile.MediaFile(self.path)
         self.assertEqual(new_mf.label, u'foo\xe8bar')
+
+
+class MP3EncodingTest(unittest.TestCase, TestHelper):
+    def setUp(self):
+        self.create_temp_dir()
+        src = os.path.join(_common.RSRC, 'full.mp3')
+        self.path = os.path.join(self.temp_dir, 'test.mp3')
+        shutil.copy(src, self.path)
+
+        self.mf = beets.mediafile.MediaFile(self.path)
+
+    def test_comment_with_latin1_encoding(self):
+        # Set up the test file with a Latin1-encoded COMM frame. The encoding
+        # indices defined by MP3 are listed here:
+        # http://id3.org/id3v2.4.0-structure
+        self.mf.mgfile['COMM::eng'].encoding = 0
+
+        # Try to store non-Latin1 text.
+        self.mf.comments = u'\u2028'
+        self.mf.save()
 
 
 class ZeroLengthMediaFile(beets.mediafile.MediaFile):
@@ -258,19 +297,19 @@ class SoundCheckTest(unittest.TestCase):
         self.assertEqual(peak, 1.0)
 
     def test_decode_zero(self):
-        data = u' 80000000 80000000 00000000 00000000 00000000 00000000 ' \
-               u'00000000 00000000 00000000 00000000'
+        data = b' 80000000 80000000 00000000 00000000 00000000 00000000 ' \
+               b'00000000 00000000 00000000 00000000'
         gain, peak = beets.mediafile._sc_decode(data)
         self.assertEqual(gain, 0.0)
         self.assertEqual(peak, 0.0)
 
     def test_malformatted(self):
-        gain, peak = beets.mediafile._sc_decode(u'foo')
+        gain, peak = beets.mediafile._sc_decode(b'foo')
         self.assertEqual(gain, 0.0)
         self.assertEqual(peak, 0.0)
 
     def test_special_characters(self):
-        gain, peak = beets.mediafile._sc_decode(u'caf\xe9')
+        gain, peak = beets.mediafile._sc_decode(u'caf\xe9'.encode('utf8'))
         self.assertEqual(gain, 0.0)
         self.assertEqual(peak, 0.0)
 

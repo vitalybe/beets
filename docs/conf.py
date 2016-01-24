@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 AUTHOR = u'Adrian Sampson'
 
 # General configuration
@@ -12,13 +14,13 @@ project = u'beets'
 copyright = u'2012, Adrian Sampson'
 
 version = '1.3'
-release = '1.3.14'
+release = '1.3.17'
 
 pygments_style = 'sphinx'
 
 # External links to the bug tracker.
 extlinks = {
-    'bug': ('https://github.com/sampsyo/beets/issues/%s', '#'),
+    'bug': ('https://github.com/beetbox/beets/issues/%s', '#'),
     'user': ('https://github.com/%s', ''),
 }
 

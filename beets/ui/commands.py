@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -22,6 +23,8 @@ from __future__ import (division, absolute_import, print_function,
 import click
 import os
 import re
+from collections import namedtuple, Counter
+from itertools import chain
 
 import beets
 from beets import ui
@@ -40,6 +43,7 @@ from beets import logging
 from beets.util.confit import _package_path
 
 VARIOUS_ARTISTS = u'Various Artists'
+PromptChoice = namedtuple('ExtraChoice', ['short', 'long', 'callback'])
 
 # Global logger.
 log = logging.getLogger('beets')
@@ -99,17 +103,11 @@ def fields_cmd(ctx):
         names.sort()
         print_("  " + "\n  ".join(names))
 
-    fs, pfs = library.Item.get_fields()
     print_("Item fields:")
-    _print_rows(fs)
-    print_("Template fields from plugins:")
-    _print_rows(pfs)
+    _print_rows(library.Item.all_keys())
 
-    fs, pfs = library.Album.get_fields()
     print_("Album fields:")
-    _print_rows(fs)
-    print_("Template fields from plugins:")
-    _print_rows(pfs)
+    _print_rows(library.Album.all_keys())
 
 
 # help: Print help text for commands
@@ -447,7 +445,7 @@ def summarize_items(items, singleton):
     return ', '.join(summary_parts)
 
 
-def _summary_judment(rec):
+def _summary_judgment(rec):
     """Determines whether a decision should be made without even asking
     the user. This occurs in quiet mode and when an action is chosen for
     NONE recommendations. Return an action or None if the user should be
@@ -481,7 +479,8 @@ def _summary_judment(rec):
 
 
 def choose_candidate(candidates, singleton, rec, cur_artist=None,
-                     cur_album=None, item=None, itemcount=None):
+                     cur_album=None, item=None, itemcount=None,
+                     extra_choices=[]):
     """Given a sorted list of candidates, ask the user for a selection
     of which candidate to use. Applies to both full albums and
     singletons  (tracks). Candidates are either AlbumMatch or TrackMatch
@@ -489,8 +488,16 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
     `cur_album`, and `itemcount` must be provided. For singletons,
     `item` must be provided.
 
-    Returns the result of the choice, which may SKIP, ASIS, TRACKS, or
-    MANUAL or a candidate (an AlbumMatch/TrackMatch object).
+    `extra_choices` is a list of `PromptChoice`s, containg the choices
+    appended by the plugins after receiving the `before_choose_candidate`
+    event. If not empty, the choices are appended to the prompt presented
+    to the user.
+
+    Returns one of the following:
+    * the result of the choice, which may be SKIP, ASIS, TRACKS, or MANUAL
+    * a candidate (an AlbumMatch/TrackMatch object)
+    * the short letter of a `PromptChoice` (if the user selected one of
+    the `extra_choices`).
     """
     # Sanity check.
     if singleton:
@@ -498,6 +505,10 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
     else:
         assert cur_artist is not None
         assert cur_album is not None
+
+    # Build helper variables for extra choices.
+    extra_opts = tuple(c.long for c in extra_choices)
+    extra_actions = tuple(c.short for c in extra_choices)
 
     # Zero candidates.
     if not candidates:
@@ -512,7 +523,7 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
                    'http://beets.readthedocs.org/en/latest/faq.html#nomatch')
             opts = ('Use as-is', 'as Tracks', 'Group albums', 'Skip',
                     'Enter search', 'enter Id', 'aBort')
-        sel = ui.input_options(opts)
+        sel = ui.input_options(opts + extra_opts)
         if sel == 'u':
             return importer.action.ASIS
         elif sel == 't':
@@ -528,6 +539,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
             return importer.action.MANUAL_ID
         elif sel == 'g':
             return importer.action.ALBUMS
+        elif sel in extra_actions:
+            return sel
         else:
             assert False
 
@@ -581,7 +594,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
             else:
                 opts = ('Skip', 'Use as-is', 'as Tracks', 'Group albums',
                         'Enter search', 'enter Id', 'aBort')
-            sel = ui.input_options(opts, numrange=(1, len(candidates)))
+            sel = ui.input_options(opts + extra_opts,
+                                   numrange=(1, len(candidates)))
             if sel == 's':
                 return importer.action.SKIP
             elif sel == 'u':
@@ -599,6 +613,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
                 return importer.action.MANUAL_ID
             elif sel == 'g':
                 return importer.action.ALBUMS
+            elif sel in extra_actions:
+                return sel
             else:  # Numerical selection.
                 match = candidates[sel - 1]
                 if sel != 1:
@@ -633,7 +649,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
         })
         if default is None:
             require = True
-        sel = ui.input_options(opts, require=require, default=default)
+        sel = ui.input_options(opts + extra_opts, require=require,
+                               default=default)
         if sel == 'a':
             return match
         elif sel == 'g':
@@ -651,6 +668,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
             raise importer.ImportAbort()
         elif sel == 'i':
             return importer.action.MANUAL_ID
+        elif sel in extra_actions:
+            return sel
 
 
 def manual_search(singleton):
@@ -683,7 +702,7 @@ class TerminalImportSession(importer.ImportSession):
                u' ({0} items)'.format(len(task.items)))
 
         # Take immediate action if appropriate.
-        action = _summary_judment(task.rec)
+        action = _summary_judgment(task.rec)
         if action == importer.action.APPLY:
             match = task.candidates[0]
             show_change(task.cur_artist, task.cur_album, match)
@@ -694,10 +713,14 @@ class TerminalImportSession(importer.ImportSession):
         # Loop until we have a choice.
         candidates, rec = task.candidates, task.rec
         while True:
+            # Gather extra choices from plugins.
+            extra_choices = self._get_plugin_choices(task)
+            extra_ops = {c.short: c.callback for c in extra_choices}
+
             # Ask for a choice from the user.
             choice = choose_candidate(
                 candidates, False, rec, task.cur_artist, task.cur_album,
-                itemcount=len(task.items)
+                itemcount=len(task.items), extra_choices=extra_choices
             )
 
             # Choose which tags to use.
@@ -716,8 +739,14 @@ class TerminalImportSession(importer.ImportSession):
                 search_id = manual_id(False)
                 if search_id:
                     _, _, candidates, rec = autotag.tag_album(
-                        task.items, search_id=search_id
+                        task.items, search_ids=search_id.split()
                     )
+            elif choice in extra_ops.keys():
+                # Allow extra ops to automatically set the post-choice.
+                post_choice = extra_ops[choice](self, task)
+                if isinstance(post_choice, importer.action):
+                    # MANUAL and MANUAL_ID have no effect, even if returned.
+                    return post_choice
             else:
                 # We have a candidate! Finish tagging. Here, choice is an
                 # AlbumMatch object.
@@ -733,7 +762,7 @@ class TerminalImportSession(importer.ImportSession):
         candidates, rec = task.candidates, task.rec
 
         # Take immediate action if appropriate.
-        action = _summary_judment(task.rec)
+        action = _summary_judgment(task.rec)
         if action == importer.action.APPLY:
             match = candidates[0]
             show_item_change(task.item, match)
@@ -742,8 +771,12 @@ class TerminalImportSession(importer.ImportSession):
             return action
 
         while True:
+            extra_choices = self._get_plugin_choices(task)
+            extra_ops = {c.short: c.callback for c in extra_choices}
+
             # Ask for a choice.
-            choice = choose_candidate(candidates, True, rec, item=task.item)
+            choice = choose_candidate(candidates, True, rec, item=task.item,
+                                      extra_choices=extra_choices)
 
             if choice in (importer.action.SKIP, importer.action.ASIS):
                 return choice
@@ -758,8 +791,14 @@ class TerminalImportSession(importer.ImportSession):
                 # Ask for a track ID.
                 search_id = manual_id(True)
                 if search_id:
-                    candidates, rec = autotag.tag_item(task.item,
-                                                       search_id=search_id)
+                    candidates, rec = autotag.tag_item(
+                        task.item, search_ids=search_id.split())
+            elif choice in extra_ops.keys():
+                # Allow extra ops to automatically set the post-choice.
+                post_choice = extra_ops[choice](self, task)
+                if isinstance(post_choice, importer.action):
+                    # MANUAL and MANUAL_ID have no effect, even if returned.
+                    return post_choice
             else:
                 # Chose a candidate.
                 assert isinstance(choice, autotag.TrackMatch)
@@ -772,16 +811,6 @@ class TerminalImportSession(importer.ImportSession):
         log.warn(u"This {0} is already in the library!",
                  ("album" if task.is_album else "item"))
 
-        # skip empty albums (coming from a previous failed import session)
-        if task.is_album:
-            real_duplicates = [dup for dup in found_duplicates if dup.items()]
-            if not real_duplicates:
-                log.info("All duplicates are empty, we ignore them")
-                task.should_remove_duplicates = True
-                return
-        else:
-            real_duplicates = found_duplicates
-
         if config['import']['quiet']:
             # In quiet mode, don't prompt -- just skip.
             log.info(u'Skipping.')
@@ -789,16 +818,11 @@ class TerminalImportSession(importer.ImportSession):
         else:
             # Print some detail about the existing and new items so the
             # user can make an informed decision.
-            for duplicate in real_duplicates:
+            for duplicate in found_duplicates:
                 print_("Old: " + summarize_items(
                     list(duplicate.items()) if task.is_album else [duplicate],
                     not task.is_album,
                 ))
-
-            if real_duplicates != found_duplicates:  # there's empty albums
-                count = len(found_duplicates) - len(real_duplicates)
-                print_("Old: {0} empty album{1}".format(
-                       count, "s" if count > 1 else ""))
 
             print_("New: " + summarize_items(
                 task.imported_items(),
@@ -825,6 +849,48 @@ class TerminalImportSession(importer.ImportSession):
         return ui.input_yn(u"Import of the directory:\n{0}\n"
                            "was interrupted. Resume (Y/n)?"
                            .format(displayable_path(path)))
+
+    def _get_plugin_choices(self, task):
+        """Get the extra choices appended to the plugins to the ui prompt.
+
+        The `before_choose_candidate` event is sent to the plugins, with
+        session and task as its parameters. Plugins are responsible for
+        checking the right conditions and returning a list of `PromptChoice`s,
+        which is flattened and checked for conflicts.
+
+        Raises `ValueError` if two of the choices have the same short letter.
+
+        Returns a list of `PromptChoice`s.
+        """
+        # Send the before_choose_candidate event and flatten list.
+        extra_choices = list(chain(*plugins.send('before_choose_candidate',
+                                                 session=self, task=task)))
+        # Take into account default options, for duplicate checking.
+        all_choices = [PromptChoice('a', 'Apply', None),
+                       PromptChoice('s', 'Skip', None),
+                       PromptChoice('u', 'Use as-is', None),
+                       PromptChoice('t', 'as Tracks', None),
+                       PromptChoice('g', 'Group albums', None),
+                       PromptChoice('e', 'Enter search', None),
+                       PromptChoice('i', 'enter Id', None),
+                       PromptChoice('b', 'aBort', None)] +\
+            extra_choices
+
+        short_letters = [c.short for c in all_choices]
+        if len(short_letters) != len(set(short_letters)):
+            # Duplicate short letter has been found.
+            duplicates = [i for i, count in Counter(short_letters).items()
+                          if count > 1]
+            for short in duplicates:
+                # Keep the first of the choices, removing the rest.
+                dup_choices = [c for c in all_choices if c.short == short]
+                for c in dup_choices[1:]:
+                    log.warn(u"Prompt choice '{0}' removed due to conflict "
+                             u"with '{1}' (short letter: '{2}')",
+                             c.long, dup_choices[0].long, c.short)
+                    extra_choices.remove(c)
+        return extra_choices
+
 
 # The import command.
 
@@ -1106,7 +1172,10 @@ def stats_cmd(ctx, query, exact):
 
     for item in items:
         if exact:
-            total_size += os.path.getsize(item.path)
+            try:
+                total_size += os.path.getsize(item.path)
+            except OSError as exc:
+                log.info('could not get size of {}: {}', item.path, exc)
         else:
             total_size += int(item.length * item.bitrate / 8)
         total_time += item.length
@@ -1206,13 +1275,7 @@ def modify_items(lib, mods, dels, query, write, move, album, confirm):
     # Apply changes to database and files
     with lib.transaction():
         for obj in changed:
-            if move:
-                cur_path = obj.path
-                if lib.directory in ancestry(cur_path):  # In library?
-                    log.debug(u'moving object {0}', displayable_path(cur_path))
-                    obj.move()
-
-            obj.try_sync(write)
+            obj.try_sync(write, move)
 
 
 def modify_parse_args(args):
@@ -1266,10 +1329,18 @@ def move_items(lib, dest, query, copy, album, pretend):
     items, albums = _do_query(lib, query, album, False)
     objs = albums if album else items
 
+    # Filter out files that don't need to be moved.
+    isitemmoved = lambda item: item.path != item.destination(basedir=dest)
+    isalbummoved = lambda album: any(isitemmoved(i) for i in album.items())
+    objs = [o for o in objs if (isalbummoved if album else isitemmoved)(o)]
+
     action = 'Copying' if copy else 'Moving'
     entity = 'album' if album else 'item'
     log.info(u'{0} {1} {2}{3}.', action, len(objs), entity,
-             's' if len(objs) > 1 else '')
+             's' if len(objs) != 1 else '')
+    if not objs:
+        return
+
     if pretend:
         if album:
             show_path_changes([(item.path, item.destination(basedir=dest))
@@ -1328,7 +1399,9 @@ def write_items(lib, query, pretend, force):
         changed = ui.show_model_changes(item, clean_item,
                                         library.Item._media_tag_fields, force)
         if (changed or force) and not pretend:
-            item.try_sync()
+            # We use `try_sync` here to keep the mtime up to date in the
+            # database.
+            item.try_sync(True, False)
 
 
 @default_command('write', short_help='write tag information to files')

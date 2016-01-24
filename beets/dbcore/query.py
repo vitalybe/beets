@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -60,9 +61,8 @@ class Query(object):
     """
     def clause(self):
         """Generate an SQLite expression implementing the query.
-        Return a clause string, a sequence of substitution values for
-        the clause, and a Query object representing the "remainder"
-        Returns (clause, subvals) where clause is a valid sqlite
+
+        Return (clause, subvals) where clause is a valid sqlite
         WHERE clause implementing the query and subvals is a list of
         items to be substituted for ?s in the clause.
         """
@@ -353,7 +353,7 @@ class CollectionQuery(Query):
         return item in self.subqueries
 
     def clause_with_joiner(self, joiner):
-        """Returns a clause created by joining together the clauses of
+        """Return a clause created by joining together the clauses of
         all subqueries with the string joiner (padded by spaces).
         """
         clause_parts = []
@@ -445,6 +445,36 @@ class OrQuery(MutableCollectionQuery):
 
     def match(self, item):
         return any([q.match(item) for q in self.subqueries])
+
+
+class NotQuery(Query):
+    """A query that matches the negation of its `subquery`, as a shorcut for
+    performing `not(subquery)` without using regular expressions.
+    """
+    def __init__(self, subquery):
+        self.subquery = subquery
+
+    def clause(self):
+        clause, subvals = self.subquery.clause()
+        if clause:
+            return 'not ({0})'.format(clause), subvals
+        else:
+            # If there is no clause, there is nothing to negate. All the logic
+            # is handled by match() for slow queries.
+            return clause, subvals
+
+    def match(self, item):
+        return not self.subquery.match(item)
+
+    def __repr__(self):
+        return "{0.__class__.__name__}({0.subquery})".format(self)
+
+    def __eq__(self, other):
+        return super(NotQuery, self).__eq__(other) and \
+            self.subquery == other.subquery
+
+    def __hash__(self):
+        return hash(('not', hash(self.subquery)))
 
 
 class TrueQuery(Query):
@@ -623,6 +653,33 @@ class DateQuery(FieldQuery):
         return clause, subvals
 
 
+class DurationQuery(NumericQuery):
+    """NumericQuery that allow human-friendly (M:SS) time interval formats.
+
+    Converts the range(s) to a float value, and delegates on NumericQuery.
+
+    Raises InvalidQueryError when the pattern does not represent an int, float
+    or M:SS time interval.
+    """
+    def _convert(self, s):
+        """Convert a M:SS or numeric string to a float.
+
+        Return None if `s` is empty.
+        Raise an InvalidQueryError if the string cannot be converted.
+        """
+        if not s:
+            return None
+        try:
+            return util.raw_seconds_short(s)
+        except ValueError:
+            try:
+                return float(s)
+            except ValueError:
+                raise InvalidQueryArgumentTypeError(
+                    s,
+                    "a M:SS string or a float")
+
+
 # Sorting.
 
 class Sort(object):
@@ -737,7 +794,7 @@ class FieldSort(Sort):
         # attributes with different types without falling over.
 
         def key(item):
-            field_val = getattr(item, self.field)
+            field_val = item.get(self.field, '')
             if self.case_insensitive and isinstance(field_val, unicode):
                 field_val = field_val.lower()
             return field_val

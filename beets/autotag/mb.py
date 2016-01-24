@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -32,7 +33,7 @@ VARIOUS_ARTISTS_ID = '89ad4ac3-39f7-470e-963a-56509c546377'
 BASE_URL = 'http://musicbrainz.org/'
 
 musicbrainzngs.set_useragent('beets', beets.__version__,
-                             'http://beets.radbox.org/')
+                             'http://beets.io/')
 
 
 class MusicBrainzAPIError(util.HumanReadableException):
@@ -259,6 +260,8 @@ def album_info(release):
         data_url=album_url(release['id']),
     )
     info.va = info.artist_id == VARIOUS_ARTISTS_ID
+    if info.va:
+        info.artist = config['va_name'].get(unicode)
     info.asin = release.get('asin')
     info.releasegroup_id = release['release-group']['id']
     info.country = release.get('country')

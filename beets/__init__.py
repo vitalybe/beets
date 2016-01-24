@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Adrian Sampson.
+# Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -14,12 +15,31 @@
 
 from __future__ import absolute_import, unicode_literals
 
+import os
+
 import beets.library
 from beets.util import confit
 
-__version__ = '1.3.14'
+__version__ = '1.3.17'
 __author__ = 'Adrian Sampson <adrian@radbox.org>'
 
 Library = beets.library.Library
 
-config = confit.LazyConfig('beets', __name__)
+
+class IncludeLazyConfig(confit.LazyConfig):
+    """A version of Confit's LazyConfig that also merges in data from
+    YAML files specified in an `include` setting.
+    """
+    def read(self, user=True, defaults=True):
+        super(IncludeLazyConfig, self).read(user, defaults)
+
+        try:
+            for view in self['include']:
+                filename = view.as_filename()
+                if os.path.isfile(filename):
+                    self.set_file(filename)
+        except confit.NotFoundError:
+            pass
+
+
+config = IncludeLazyConfig('beets', __name__)

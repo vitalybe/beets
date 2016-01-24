@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Blemjhoo Tezoulbr <baobab@heresiarch.info>.
+# Copyright 2016, Blemjhoo Tezoulbr <baobab@heresiarch.info>.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -41,25 +42,62 @@ class ZeroPlugin(BeetsPlugin):
 
         self.config.add({
             'fields': [],
+            'keep_fields': [],
+            'update_database': False,
         })
 
         self.patterns = {}
         self.warned = False
 
-        for field in self.config['fields'].as_str_seq():
-            if field in ('id', 'path', 'album_id'):
-                self._log.warn(u'field \'{0}\' ignored, zeroing '
-                               u'it would be dangerous', field)
-                continue
+        # We'll only handle `fields` or `keep_fields`, but not both.
+        if self.config['fields'] and self.config['keep_fields']:
+            self._log.warn(u'cannot blacklist and whitelist at the same time')
+
+        # Blacklist mode.
+        if self.config['fields']:
+            self.validate_config('fields')
+            for field in self.config['fields'].as_str_seq():
+                self.set_pattern(field)
+
+        # Whitelist mode.
+        elif self.config['keep_fields']:
+            self.validate_config('keep_fields')
+
+            for field in MediaFile.fields():
+                if field in self.config['keep_fields'].as_str_seq():
+                    continue
+                self.set_pattern(field)
+
+            # These fields should always be preserved.
+            for key in ('id', 'path', 'album_id'):
+                if key in self.patterns:
+                    del self.patterns[key]
+
+    def validate_config(self, mode):
+        """Check whether fields in the configuration are valid.
+
+        `mode` should either be "fields" or "keep_fields", indicating
+        the section of the configuration to validate.
+        """
+        for field in self.config[mode].as_str_seq():
             if field not in MediaFile.fields():
                 self._log.error(u'invalid field: {0}', field)
                 continue
+            if mode == 'fields' and field in ('id', 'path', 'album_id'):
+                self._log.warn(u'field \'{0}\' ignored, zeroing '
+                               u'it would be dangerous', field)
+                continue
 
-            try:
-                self.patterns[field] = self.config[field].as_str_seq()
-            except confit.NotFoundError:
-                # Matches everything
-                self.patterns[field] = True
+    def set_pattern(self, field):
+        """Set a field in `self.patterns` to a string list corresponding to
+        the configuration, or `True` if the field has no specific
+        configuration.
+        """
+        try:
+            self.patterns[field] = self.config[field].as_str_seq()
+        except confit.NotFoundError:
+            # Matches everything
+            self.patterns[field] = True
 
     def import_task_choice_event(self, session, task):
         """Listen for import_task_choice event."""
@@ -99,3 +137,5 @@ class ZeroPlugin(BeetsPlugin):
             if match:
                 self._log.debug(u'{0}: {1} -> None', field, value)
                 tags[field] = None
+                if self.config['update_database']:
+                    item[field] = None

@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Dang Mai <contact@dangmai.net>.
+# Copyright 2016, Dang Mai <contact@dangmai.net>.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -23,7 +24,7 @@ from beets import ui
 from beets.util import mkdirall, normpath, syspath
 from beets.library import Item, Album, parse_query_string
 from beets.dbcore import OrQuery
-from beets.dbcore.query import MultipleSort
+from beets.dbcore.query import MultipleSort, ParsingError
 import os
 
 
@@ -93,36 +94,46 @@ class SmartPlaylistPlugin(BeetsPlugin):
         self._matched_playlists = set()
 
         for playlist in self.config['playlists'].get(list):
-            playlist_data = (playlist['name'],)
-            for key, Model in (('query', Item), ('album_query', Album)):
-                qs = playlist.get(key)
-                if qs is None:
-                    query_and_sort = None, None
-                elif isinstance(qs, basestring):
-                    query_and_sort = parse_query_string(qs, Model)
-                elif len(qs) == 1:
-                    query_and_sort = parse_query_string(qs[0], Model)
-                else:
-                    # multiple queries and sorts
-                    queries, sorts = zip(*(parse_query_string(q, Model)
-                                           for q in qs))
-                    query = OrQuery(queries)
-                    final_sorts = []
-                    for s in sorts:
-                        if s:
-                            if isinstance(s, MultipleSort):
-                                final_sorts += s.sorts
-                            else:
-                                final_sorts.append(s)
-                    if not final_sorts:
-                        sort = None
-                    elif len(final_sorts) == 1:
-                        sort, = final_sorts
-                    else:
-                        sort = MultipleSort(final_sorts)
-                    query_and_sort = query, sort
+            if 'name' not in playlist:
+                self._log.warn("playlist configuration is missing name")
+                continue
 
-                playlist_data += (query_and_sort,)
+            playlist_data = (playlist['name'],)
+            try:
+                for key, Model in (('query', Item), ('album_query', Album)):
+                    qs = playlist.get(key)
+                    if qs is None:
+                        query_and_sort = None, None
+                    elif isinstance(qs, basestring):
+                        query_and_sort = parse_query_string(qs, Model)
+                    elif len(qs) == 1:
+                        query_and_sort = parse_query_string(qs[0], Model)
+                    else:
+                        # multiple queries and sorts
+                        queries, sorts = zip(*(parse_query_string(q, Model)
+                                               for q in qs))
+                        query = OrQuery(queries)
+                        final_sorts = []
+                        for s in sorts:
+                            if s:
+                                if isinstance(s, MultipleSort):
+                                    final_sorts += s.sorts
+                                else:
+                                    final_sorts.append(s)
+                        if not final_sorts:
+                            sort = None
+                        elif len(final_sorts) == 1:
+                            sort, = final_sorts
+                        else:
+                            sort = MultipleSort(final_sorts)
+                        query_and_sort = query, sort
+
+                    playlist_data += (query_and_sort,)
+
+            except ParsingError as exc:
+                self._log.warn("invalid query in playlist {}: {}",
+                               playlist['name'], exc)
+                continue
 
             self._unmatched_playlists.add(playlist_data)
 

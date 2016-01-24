@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
-# Copyright 2015, Thomas Scholtes.
+# Copyright 2016, Thomas Scholtes.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -81,6 +82,26 @@ class EmbedartCliTest(_common.TestCase, TestHelper):
         self.run_command('embedart')
         mediafile = MediaFile(syspath(item.path))
         self.assertEqual(mediafile.images[0].data, self.image_data)
+
+    def test_embed_art_remove_art_file(self):
+        self._setup_data()
+        album = self.add_album_fixture()
+
+        logging.getLogger('beets.embedart').setLevel(logging.DEBUG)
+
+        handle, tmp_path = tempfile.mkstemp()
+        os.write(handle, self.image_data)
+        os.close(handle)
+
+        album.artpath = tmp_path
+        album.store()
+
+        config['embedart']['remove_art_file'] = True
+        self.run_command('embedart')
+
+        if os.path.isfile(tmp_path):
+            os.remove(tmp_path)
+            self.fail('Artwork file {0} was not deleted'.format(tmp_path))
 
     def test_art_file_missing(self):
         self.add_album_fixture()
