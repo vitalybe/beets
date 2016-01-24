@@ -1197,23 +1197,26 @@ class BeetsCommand(click.MultiCommand):
         rv = {}
 
         for command in subcommands:
-            # FIXME EXPERIMENTAL!
-            # For compatibility, convert old optparse-based commands
-            # into Click commands.
             if isinstance(command, Subcommand):
+                # FIXME EXPERIMENTAL!
+                # For compatibility, convert old optparse-based commands
+                # into Click commands.
                 def callback(opts, args):
                     command.func(ctx.lib, opts, args)
-                command = optparse2click.parser_to_click(
+                cmd = optparse2click.parser_to_click(
                     command.parser,
                     callback,
                     name=command.name,
                     help=command.help,
                 )
 
-            rv[command.name] = command
-            if hasattr(command, 'aliases'):
-                for alias in command.aliases:
-                    rv[alias] = command
+            else:
+                cmd = command
+
+            rv[cmd.name] = cmd
+            if hasattr(cmd, 'aliases'):
+                for alias in cmd.aliases:
+                    rv[alias] = cmd
 
         return rv
 
@@ -1231,6 +1234,15 @@ class BeetsCommand(click.MultiCommand):
             return config_cmd
 
         return self._commands(ctx).get(name)
+
+
+class Context(object):
+
+    def __init__(self, lib=None):
+        self.lib = lib
+
+
+pass_context = click.make_pass_decorator(Context, ensure=True)
 
 
 def album_option(f):
@@ -1307,15 +1319,6 @@ def format_option(flags=('-f', '--format'), target=None):
 
 def all_common_options(f):
     return album_option(path_option(format_option()(f)))
-
-
-class Context(object):
-
-    def __init__(self, lib=None):
-        self.lib = lib
-
-
-pass_context = click.make_pass_decorator(Context, ensure=True)
 
 
 @click.command(cls=BeetsCommand,

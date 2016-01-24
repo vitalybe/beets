@@ -19,6 +19,7 @@ Click's `Command` objects.
 """
 
 import click
+import optparse
 
 
 def option_to_click(option):
@@ -59,9 +60,15 @@ def parser_to_click(parser, callback, **kwargs):
 
     # Handle the callback and translate to the `optparse` arguments.
     def shim_callback(**kwargs):
+        # Get the positional arguments.
         args = kwargs.pop('args')
-        print(args, kwargs)
-        # callback(args, kwargs)
+
+        # Turn the rest of the arguments into a namespace object.
+        opts = optparse.Values()
+        for key, value in kwargs.items():
+            setattr(opts, key, value)
+
+        callback(opts, args)
 
     # Construct the Click command object.
     command = click.Command(params=params, callback=shim_callback, **kwargs)
