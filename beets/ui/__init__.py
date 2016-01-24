@@ -843,26 +843,6 @@ class CommonOptionsParser(optparse.OptionParser, object):
 # succinct example program.
 
 
-# FIXME: kill original Subcommand in favor of this
-class ClickSubcommand(click.Command):
-    def __init__(self, *args, **kwargs):
-        aliases = kwargs.pop('aliases', ())
-        self._help = ''
-        self.aliases = aliases
-        click.Command.__init__(self, *args, **kwargs)
-
-    @property
-    def help(self):
-        return self._help
-
-    @help.setter
-    def help(self, value):
-        value = value or ''
-        if self.aliases:
-            value += '\n\nCommand aliases: {}'.format(' '.join(self.aliases))
-        self._help = value
-
-
 class Subcommand(object):
     """A subcommand of a root command-line application that may be
     invoked by a SubcommandOptionParser.
@@ -1172,7 +1152,37 @@ def _open_library(config):
     return lib
 
 
-class BeetsCLI(click.MultiCommand):
+# Click infrastructure for the root command, subcommands, and common
+# options.
+
+class AliasedSubcommand(click.Command):
+    """A `click.Command` with aliases (i.e., alternate spellings for the
+    command's name.
+
+    For the aliases to actually work, this has to be used with a
+    `click.MultiCommand` instance that knows to look for them. In our
+    case, this is `BeetsCommand`.
+    """
+    def __init__(self, *args, **kwargs):
+        aliases = kwargs.pop('aliases', ())
+        self._help = ''
+        self.aliases = aliases
+        click.Command.__init__(self, *args, **kwargs)
+
+    # TODO Remove this property in favor of modifying the formatter.
+    @property
+    def help(self):
+        return self._help
+
+    @help.setter
+    def help(self, value):
+        value = value or ''
+        if self.aliases:
+            value += '\n\nCommand aliases: {}'.format(' '.join(self.aliases))
+        self._help = value
+
+
+class BeetsCommand(click.MultiCommand):
 
     def _commands(self, ctx):
         # FIXME: Awful performance, cache per ctx
@@ -1196,13 +1206,11 @@ class BeetsCLI(click.MultiCommand):
                     command.name,
                     command.help,
                 )
-                continue
-
-            assert isinstance(command, ClickSubcommand)
 
             rv[command.name] = command
-            for alias in command.aliases:
-                rv[alias] = command
+            if hasattr(command, 'aliases'):
+                for alias in command.aliases:
+                    rv[alias] = command
 
         return rv
 
@@ -1307,7 +1315,7 @@ class Context(object):
 pass_context = click.make_pass_decorator(Context, ensure=True)
 
 
-@click.command(cls=BeetsCLI,
+@click.command(cls=BeetsCommand,
                context_settings={'help_option_names': ['-h', '--help']})
 @format_option(flags=('--format-item',), target=library.Item)
 @format_option(flags=('--format-album',), target=library.Album)

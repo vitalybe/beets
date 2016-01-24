@@ -28,8 +28,7 @@ from itertools import chain
 
 import beets
 from beets import ui
-from beets.ui import ClickSubcommand, print_, input_, decargs, \
-    show_path_changes
+from beets.ui import print_, input_, decargs, show_path_changes
 from beets import autotag
 from beets.autotag import Recommendation
 from beets.autotag import hooks
@@ -54,7 +53,8 @@ default_commands = []
 
 
 def default_command(name=None, **kwargs):
-    orig_decorator = click.command(name, cls=ClickSubcommand, **kwargs)
+    orig_decorator = click.command(name, cls=ui.AliasedSubcommand, **kwargs)
+
     def decorator(f):
         rv = orig_decorator(f)
         default_commands.append(rv)
