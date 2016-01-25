@@ -21,7 +21,7 @@ from __future__ import (division, absolute_import, print_function,
 import shlex
 
 from beets.plugins import BeetsPlugin
-from beets.ui import decargs, print_, vararg_callback, Subcommand, UserError
+from beets.ui import decargs, print_, Subcommand, UserError
 from beets.util import command_output, displayable_path, subprocess
 from beets.library import Item, Album
 
@@ -78,10 +78,10 @@ class DuplicatesPlugin(BeetsPlugin):
                                         help='report duplicates only if all'
                                         ' attributes are set')
 
-        self._command.parser.add_option('-k', '--keys', dest='keys',
-                                        action='callback', metavar='KEY1 KEY2',
-                                        callback=vararg_callback,
-                                        help='report duplicates based on keys')
+        self._command.parser.add_option('-k', '--key', dest='keys',
+                                        action='append', metavar='KEY1 KEY2',
+                                        help='report duplicates based key '
+                                        '(use multiple times)')
 
         self._command.parser.add_option('-M', '--merge', dest='merge',
                                         action='store_true',
@@ -120,6 +120,10 @@ class DuplicatesPlugin(BeetsPlugin):
             tiebreak = self.config['tiebreak'].get(dict)
             strict = self.config['strict'].get(bool)
             tag = self.config['tag'].get(str)
+
+            # Command-line override.
+            if opts.key:
+                keys = opts.key
 
             if album:
                 if not keys:
