@@ -24,7 +24,6 @@ from __future__ import (division, absolute_import, print_function,
 import locale
 import optparse
 import click
-import textwrap
 import sys
 from difflib import SequenceMatcher
 import sqlite3
@@ -834,213 +833,40 @@ class CommonOptionsParser(optparse.OptionParser, object):
         self.add_format_option()
 
 
-# Subcommand parsing infrastructure.
-#
-# This is a fairly generic subcommand parser for optparse. It is
-# maintained externally here:
-# http://gist.github.com/462717
-# There you will also find a better description of the code and a more
-# succinct example program.
-
-
-class Subcommand(object):
-    """A subcommand of a root command-line application that may be
-    invoked by a SubcommandOptionParser.
+class LegacySubcommand(object):
+    """A backwards-compatibility shim for code that still uses the
+    `optparse` API. We translate these into Click commands.
     """
     def __init__(self, name, parser=None, help='', aliases=(), hide=False):
-        """Creates a new subcommand. name is the primary way to invoke
-        the subcommand; aliases are alternate names. parser is an
-        OptionParser responsible for parsing the subcommand's options.
-        help is a short description of the command. If no parser is
-        given, it defaults to a new, empty CommonOptionsParser.
-        """
         self.name = name
         self.parser = parser or CommonOptionsParser()
         self.aliases = aliases
         self.help = help
         self.hide = hide
-        self._root_parser = None
 
-    def print_help(self):
-        self.parser.print_help()
-
-    def parse_args(self, args):
-        return self.parser.parse_args(args)
-
-    @property
-    def root_parser(self):
-        return self._root_parser
-
-    @root_parser.setter
-    def root_parser(self, root_parser):
-        self._root_parser = root_parser
-        self.parser.prog = '{0} {1}'.format(
-            root_parser.get_prog_name().decode('utf8'), self.name)
-
-
-class SubcommandsOptionParser(CommonOptionsParser):
-    """A variant of OptionParser that parses subcommands and their
-    arguments.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """Create a new subcommand-aware option parser. All of the
-        options to OptionParser.__init__ are supported in addition
-        to subcommands, a sequence of Subcommand objects.
+    def _to_click(self, ctx):
+        """Create a `click.Command` from the `OptionParser`.
         """
-        # A more helpful default usage.
-        if 'usage' not in kwargs:
-            kwargs['usage'] = """
-  %prog COMMAND [ARGS...]
-  %prog help COMMAND"""
-        kwargs['add_help_option'] = False
+        # The callback gets the beets Context and invokes the
+        # appropriate command. Using a default argument here is
+        # a *totally hacky* way around Python's ordinary
+        # variable scoping, which doesn't let this closure
+        # capture the *current* value of `command` (i.e., later
+        # mutations confuse it).
+        def callback(opts, args, func=self.func):
+            func(ctx.find_object(Context).lib, opts, args)
 
-        # Super constructor.
-        super(SubcommandsOptionParser, self).__init__(*args, **kwargs)
-
-        # Our root parser needs to stop on the first unrecognized argument.
-        self.disable_interspersed_args()
-
-        self.subcommands = []
-
-    def add_subcommand(self, *cmds):
-        """Adds a Subcommand object to the parser's list of commands.
-        """
-        for cmd in cmds:
-            cmd.root_parser = self
-            self.subcommands.append(cmd)
-
-    # Add the list of subcommands to the help message.
-    def format_help(self, formatter=None):
-        # Get the original help message, to which we will append.
-        out = super(SubcommandsOptionParser, self).format_help(formatter)
-        if formatter is None:
-            formatter = self.formatter
-
-        # Subcommands header.
-        result = ["\n"]
-        result.append(formatter.format_heading('Commands'))
-        formatter.indent()
-
-        # Generate the display names (including aliases).
-        # Also determine the help position.
-        disp_names = []
-        help_position = 0
-        subcommands = [c for c in self.subcommands if not c.hide]
-        subcommands.sort(key=lambda c: c.name)
-        for subcommand in subcommands:
-            name = subcommand.name
-            if subcommand.aliases:
-                name += ' (%s)' % ', '.join(subcommand.aliases)
-            disp_names.append(name)
-
-            # Set the help position based on the max width.
-            proposed_help_position = len(name) + formatter.current_indent + 2
-            if proposed_help_position <= formatter.max_help_position:
-                help_position = max(help_position, proposed_help_position)
-
-        # Add each subcommand to the output.
-        for subcommand, name in zip(subcommands, disp_names):
-            # Lifted directly from optparse.py.
-            name_width = help_position - formatter.current_indent - 2
-            if len(name) > name_width:
-                name = "%*s%s\n" % (formatter.current_indent, "", name)
-                indent_first = help_position
-            else:
-                name = "%*s%-*s  " % (formatter.current_indent, "",
-                                      name_width, name)
-                indent_first = 0
-            result.append(name)
-            help_width = formatter.width - help_position
-            help_lines = textwrap.wrap(subcommand.help, help_width)
-            result.append("%*s%s\n" % (indent_first, "", help_lines[0]))
-            result.extend(["%*s%s\n" % (help_position, "", line)
-                           for line in help_lines[1:]])
-        formatter.dedent()
-
-        # Concatenate the original help message with the subcommand
-        # list.
-        return out + "".join(result)
-
-    def _subcommand_for_name(self, name):
-        """Return the subcommand in self.subcommands matching the
-        given name. The name may either be the name of a subcommand or
-        an alias. If no subcommand matches, returns None.
-        """
-        for subcommand in self.subcommands:
-            if name == subcommand.name or \
-               name in subcommand.aliases:
-                return subcommand
-        return None
-
-    def parse_global_options(self, args):
-        """Parse options up to the subcommand argument. Returns a tuple
-        of the options object and the remaining arguments.
-        """
-        options, subargs = self.parse_args(args)
-
-        # Force the help command
-        if options.help:
-            subargs = ['help']
-        elif options.version:
-            subargs = ['version']
-        return options, subargs
-
-    def parse_subcommand(self, args):
-        """Given the `args` left unused by a `parse_global_options`,
-        return the invoked subcommand, the subcommand options, and the
-        subcommand arguments.
-        """
-        # Help is default command
-        if not args:
-            args = ['help']
-
-        cmdname = args.pop(0)
-        subcommand = self._subcommand_for_name(cmdname)
-        if not subcommand:
-            raise UserError("unknown command '{0}'".format(cmdname))
-
-        suboptions, subargs = subcommand.parse_args(args)
-        return subcommand, suboptions, subargs
+        return optparse2click.parser_to_click(
+            self.parser,
+            callback,
+            cls=AliasedSubcommand,
+            name=self.name,
+            help=self.help,
+            aliases=self.aliases,
+        )
 
 
-optparse.Option.ALWAYS_TYPED_ACTIONS += ('callback',)
-
-
-def vararg_callback(option, opt_str, value, parser):
-    """Callback for an option with variable arguments.
-    Manually collect arguments right of a callback-action
-    option (ie. with action="callback"), and add the resulting
-    list to the destination var.
-
-    Usage:
-    parser.add_option("-c", "--callback", dest="vararg_attr",
-                      action="callback", callback=vararg_callback)
-
-    Details:
-    http://docs.python.org/2/library/optparse.html#callback-example-6-variable
-    -arguments
-    """
-    value = [value]
-
-    def floatable(str):
-        try:
-            float(str)
-            return True
-        except ValueError:
-            return False
-
-    for arg in parser.rargs:
-        # stop on --foo like options
-        if arg[:2] == "--" and len(arg) > 2:
-            break
-        # stop on -a, but not on -3 or -3.0
-        if arg[:1] == "-" and len(arg) > 1 and not floatable(arg):
-            break
-        value.append(arg)
-
-    del parser.rargs[:len(value) - 1]
-    setattr(parser.values, option.dest, value)
+Subcommand = LegacySubcommand
 
 
 # The main entry point and bootstrapping.
@@ -1194,41 +1020,21 @@ class BeetsCommand(click.MultiCommand):
         subcommands = list(default_commands)
         subcommands.extend(plugins.commands())
 
-        rv = {}
+        out = {}
 
         for command in subcommands:
-            if isinstance(command, Subcommand):
-                # FIXME EXPERIMENTAL!
-                # For compatibility, convert old optparse-based commands
-                # into Click commands.
+            # For compatibility, convert old optparse-based commands
+            # into Click commands.
+            if isinstance(command, LegacySubcommand):
+                command = command._to_click(ctx)
 
-                # The callback gets the beets Context and invokes the
-                # appropriate command. Using a default argument here is
-                # a *totally hacky* way around Python's ordinary
-                # variable scoping, which doesn't let this closure
-                # capture the *current* value of `command` (i.e., later
-                # mutations confuse it).
-                def callback(opts, args, func=command.func):
-                    func(ctx.find_object(Context).lib, opts, args)
+            # Register the alias names.
+            out[command.name] = command
+            if hasattr(command, 'aliases'):
+                for alias in command.aliases:
+                    out[alias] = command
 
-                cmd = optparse2click.parser_to_click(
-                    command.parser,
-                    callback,
-                    cls=AliasedSubcommand,
-                    name=command.name,
-                    help=command.help,
-                    aliases=command.aliases,
-                )
-
-            else:
-                cmd = command
-
-            rv[cmd.name] = cmd
-            if hasattr(cmd, 'aliases'):
-                for alias in cmd.aliases:
-                    rv[alias] = cmd
-
-        return rv
+        return out
 
     def list_commands(self, ctx):
         # Skip aliases for help page
