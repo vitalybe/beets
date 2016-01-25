@@ -993,97 +993,26 @@ def all_common_options(f):
 class LegacyOptionsParser(optparse.OptionParser, object):
     """For backwards compatibility with optparse code, provides helpers
     for adding common command-line options.
+
+    This shim just wraps up a set of flags indicating the requested
+    options so they can be added via Click later on.
     """
     def __init__(self, *args, **kwargs):
         super(LegacyOptionsParser, self).__init__(*args, **kwargs)
-        self._album_flags = False
-        # this serves both as an indicator that we offer the feature AND allows
-        # us to check whether it has been specified on the CLI - bypassing the
-        # fact that arguments may be in any order
+        self._album_option = False
+        self._path_option = False
+        self._format_option = False
+        self._format_target = None
 
-    def add_album_option(self, flags=('-a', '--album')):
-        """Add a -a/--album option to match albums instead of tracks.
+    def add_album_option(self):
+        self._album_option = True
 
-        If used then the format option can auto-detect whether we're setting
-        the format for items or albums.
-        Sets the album property on the options extracted from the CLI.
-        """
-        album = optparse.Option(*flags, action='store_true',
-                                help='match albums instead of tracks')
-        self.add_option(album)
-        self._album_flags = set(flags)
+    def add_path_option(self):
+        self._path_option = True
 
-    def _set_format(self, option, opt_str, value, parser, target=None,
-                    fmt=None, store_true=False):
-        """Internal callback that sets the correct format while parsing CLI
-        arguments.
-        """
-        if store_true:
-            setattr(parser.values, option.dest, True)
-
-        value = fmt or value and unicode(value) or ''
-        parser.values.format = value
-        if target:
-            config[target._format_config_key].set(value)
-        else:
-            if self._album_flags:
-                if parser.values.album:
-                    target = library.Album
-                else:
-                    # the option is either missing either not parsed yet
-                    if self._album_flags & set(parser.rargs):
-                        target = library.Album
-                    else:
-                        target = library.Item
-                config[target._format_config_key].set(value)
-            else:
-                config[library.Item._format_config_key].set(value)
-                config[library.Album._format_config_key].set(value)
-
-    def add_path_option(self, flags=('-p', '--path')):
-        """Add a -p/--path option to display the path instead of the default
-        format.
-
-        By default this affects both items and albums. If add_album_option()
-        is used then the target will be autodetected.
-
-        Sets the format property to u'$path' on the options extracted from the
-        CLI.
-        """
-        path = optparse.Option(*flags, nargs=0, action='callback',
-                               callback=self._set_format,
-                               callback_kwargs={'fmt': '$path',
-                                                'store_true': True},
-                               help='print paths for matched items or albums')
-        self.add_option(path)
-
-    def add_format_option(self, flags=('-f', '--format'), target=None):
-        """Add -f/--format option to print some LibModel instances with a
-        custom format.
-
-        `target` is optional and can be one of ``library.Item``, 'item',
-        ``library.Album`` and 'album'.
-
-        Several behaviors are available:
-            - if `target` is given then the format is only applied to that
-            LibModel
-            - if the album option is used then the target will be autodetected
-            - otherwise the format is applied to both items and albums.
-
-        Sets the format property on the options extracted from the CLI.
-        """
-        kwargs = {}
-        if target:
-            if isinstance(target, basestring):
-                target = {'item': library.Item,
-                          'album': library.Album}[target]
-            kwargs['target'] = target
-
-        opt = optparse.Option(*flags, action='callback',
-                              callback=self._set_format,
-                              callback_kwargs=kwargs,
-                              help='print with custom format')
-        self.add_option(opt)
+    def add_format_option(self, target=None):
+        self._format_option = True
+        self._format_target = target
 
     def add_all_common_options(self):
         """Add album, path and format options.
@@ -1116,7 +1045,8 @@ class LegacySubcommand(object):
         def callback(opts, args, func=self.func):
             func(ctx.find_object(Context).lib, opts, args)
 
-        return optparse2click.parser_to_click(
+        # Convert from the OptionParser instance to a Command.
+        command = optparse2click.parser_to_click(
             self.parser,
             callback,
             cls=AliasedSubcommand,
@@ -1124,6 +1054,16 @@ class LegacySubcommand(object):
             help=self.help,
             aliases=self.aliases,
         )
+
+        # Unspool the requested "shortcut" options.
+        if self.parser._album_option:
+            command = album_option(command)
+        if self.parser._path_option:
+            command = path_option(command)
+        if self.parser._format_option:
+            command = format_option(target=self.parser._format_target)(command)
+
+        return command
 
 
 Subcommand = LegacySubcommand  # The old name.

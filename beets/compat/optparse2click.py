@@ -56,7 +56,6 @@ def option_to_click(option):
 
     elif option.action == 'callback':
         def option_callback_shim(ctx, param, value):
-            print(ctx, param, value)
             args = option.callback_args or ()
             kwargs = option.callback_kwargs or {}
             option.callback(
