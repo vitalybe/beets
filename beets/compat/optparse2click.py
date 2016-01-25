@@ -53,7 +53,7 @@ def option_to_click(option):
 
     op = click.Option(
         # The option names (and spelling).
-        option._long_opts + option._short_opts,
+        option._long_opts + option._short_opts + [option.dest],
 
         help=option.help,
         metavar=option.metavar,
