@@ -41,6 +41,11 @@ def option_to_click(option):
     nargs = option.nargs
     default = option.default
 
+    # Handle the no-default sentinel.
+    if default == optparse.NO_DEFAULT:
+        default = None
+
+    # The various behaviors available in optparse.
     if option.action == 'store_true':
         is_flag = True
         flag_value = True

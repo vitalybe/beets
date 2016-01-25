@@ -54,6 +54,7 @@ class DuplicatesPlugin(BeetsPlugin):
         self._command = Subcommand('duplicates',
                                    help=__doc__,
                                    aliases=['dup'])
+
         self._command.parser.add_option('-c', '--count', dest='count',
                                         action='store_true',
                                         help='show duplicate counts')
