@@ -24,6 +24,7 @@ import os
 import re
 from collections import namedtuple, Counter
 from itertools import chain
+import click
 
 import beets
 from beets import ui
@@ -103,26 +104,24 @@ default_commands.append(fields_cmd)
 
 # help: Print help text for commands
 
-class HelpCommand(ui.Subcommand):
-
-    def __init__(self):
-        super(HelpCommand, self).__init__(
-            'help', aliases=('?',),
-            help='give detailed help on a specific sub-command',
-        )
-
-    def func(self, lib, opts, args):
-        if args:
-            cmdname = args[0]
-            helpcommand = self.root_parser._subcommand_for_name(cmdname)
-            if not helpcommand:
-                raise ui.UserError("unknown command '{0}'".format(cmdname))
-            helpcommand.print_help()
-        else:
-            self.root_parser.print_help()
+@click.command('help',
+               short_help='give detailed help on a specific sub-command',
+               cls=ui.Command)
+@click.pass_context
+def help_cmd(ctx):
+    if not ctx.args:
+        print_(ctx.parent.get_help())
+        return
+    cmd_name, cmd, args = ctx.parent.command.resolve_command(
+        ctx.parent,
+        ctx.args
+    )
+    with cmd.make_context(cmd_name, args, parent=ctx.parent) as ctx_:
+        print_(ctx_.get_help())
 
 
-default_commands.append(HelpCommand())
+help_cmd.allow_extra_args = True
+default_commands.append(help_cmd)
 
 
 # import: Autotagger and importer.
