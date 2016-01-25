@@ -1201,8 +1201,16 @@ class BeetsCommand(click.MultiCommand):
                 # FIXME EXPERIMENTAL!
                 # For compatibility, convert old optparse-based commands
                 # into Click commands.
-                def callback(opts, args):
-                    command.func(ctx.lib, opts, args)
+
+                # The callback gets the beets Context and invokes the
+                # appropriate command. Using a default argument here is
+                # a *totally hacky* way around Python's ordinary
+                # variable scoping, which doesn't let this closure
+                # capture the *current* value of `command` (i.e., later
+                # mutations confuse it).
+                def callback(opts, args, func=command.func):
+                    func(ctx.find_object(Context).lib, opts, args)
+
                 cmd = optparse2click.parser_to_click(
                     command.parser,
                     callback,
@@ -1237,7 +1245,8 @@ class BeetsCommand(click.MultiCommand):
 
 
 class Context(object):
-
+    """A context object that is passed to each command callback.
+    """
     def __init__(self, lib=None):
         self.lib = lib
 
@@ -1321,6 +1330,7 @@ def all_common_options(f):
     return album_option(path_option(format_option()(f)))
 
 
+# TODO `main` should be the command; not `_raw_main`.
 @click.command(cls=BeetsCommand,
                context_settings={'help_option_names': ['-h', '--help']})
 @format_option(flags=('--format-item',), target=library.Item)
