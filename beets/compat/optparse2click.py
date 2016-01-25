@@ -28,6 +28,12 @@ def option_to_click(option):
     If the option should be dropped (i.e., it's a help option), return
     None.
     """
+    # Get the flags and, if specified, the destination name.
+    decls = []
+    decls = option._long_opts + option._short_opts
+    if option.dest:
+        decls.append(option.dest)
+
     is_flag = False
     multiple = False
     callback = None
@@ -50,21 +56,28 @@ def option_to_click(option):
 
     elif option.action == 'callback':
         def option_callback_shim(ctx, param, value):
-            pass
-            # option.callback(option, opt, value, parser,
-            # *option.callback_args,
-            # **option.callback_kwargs)
+            print(ctx, param, value)
+            args = option.callback_args or ()
+            kwargs = option.callback_kwargs or {}
+            option.callback(
+                option,  # The Option object itself.
+                decls[0],  # Option string.
+                value,
+                None,  # The OptionParser (not supported).
+                *args,
+                **kwargs
+            )
+            return value
         callback = option_callback_shim
+
+        # Click doesn't like callbacks with nargs <= 1.
+        if nargs == 0:
+            is_flag = True
+            default = False
         nargs = None
 
     elif option.action == 'help':
         return None
-
-    # Get the flags and, if specified, the destination name.
-    decls = []
-    decls = option._long_opts + option._short_opts
-    if option.dest:
-        decls.append(option.dest)
 
     op = click.Option(
         decls,
