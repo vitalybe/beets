@@ -68,12 +68,13 @@ def option_to_click(option):
     return op
 
 
-def parser_to_click(parser, callback, **kwargs):
+def parser_to_click(parser, callback, cls=click.Command, **kwargs):
     """Convert an `optparse.OptionParser` to a `click.Command`.
 
     `parser` is the `OptionParser`. `func` is the callback to be invoked
     for the command; its arguments are `opts`, a namespace object for
     the named options, and `args`, a list of positional arguments.
+    `cls` is the `Command` subclass to instantiate.
 
     All other keyword arguments are passed through to the `Command`
     constructor.
@@ -103,5 +104,4 @@ def parser_to_click(parser, callback, **kwargs):
         callback(opts, args)
 
     # Construct the Click command object.
-    command = click.Command(params=params, callback=shim_callback, **kwargs)
-    return command
+    return cls(params=params, callback=shim_callback, **kwargs)
