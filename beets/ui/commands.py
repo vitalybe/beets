@@ -53,7 +53,7 @@ default_commands = []
 
 
 def default_command(name=None, **kwargs):
-    orig_decorator = click.command(name, cls=ui.AliasedSubcommand, **kwargs)
+    orig_decorator = click.command(name, cls=ui.Command, **kwargs)
 
     def decorator(f):
         rv = orig_decorator(f)
