@@ -108,19 +108,19 @@ default_commands.append(fields_cmd)
                short_help='give detailed help on a specific sub-command',
                cls=ui.Command)
 @click.pass_context
-def help_cmd(ctx):
-    if not ctx.args:
+@click.argument('command', required=False)
+def help_cmd(ctx, command):
+    if not command:
         print_(ctx.parent.get_help())
         return
     cmd_name, cmd, args = ctx.parent.command.resolve_command(
         ctx.parent,
-        ctx.args
+        [command]
     )
     with cmd.make_context(cmd_name, args, parent=ctx.parent) as ctx_:
         print_(ctx_.get_help())
 
 
-help_cmd.allow_extra_args = True
 default_commands.append(help_cmd)
 
 
