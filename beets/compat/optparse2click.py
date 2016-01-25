@@ -24,16 +24,46 @@ import optparse
 
 def option_to_click(option):
     """Convert a `optparse.Option` to a `click.Option`.
+
+    If the option should be dropped (i.e., it's a help option), return
+    None.
     """
+    is_flag = False
+    multiple = False
+    callback = None
+    flag_value = None
+
+    if option.action == 'store_true':
+        is_flag = True
+        flag_value = True
+
+    elif option.action == 'store_false':
+        is_flag = True
+        flag_value = False
+
+    elif option.action == 'append':
+        multiple = True
+
+    elif option.action == 'callback':
+        # TODO Adjust signature.
+        callback = option.callback
+
+    elif option.action == 'help':
+        return None
+
     op = click.Option(
         # The option names (and spelling).
         option._long_opts + option._short_opts,
 
-        # Details that we can port right over from optparse.
         help=option.help,
         metavar=option.metavar,
         nargs=option.nargs,
         default=option.default,
+
+        is_flag=is_flag,
+        flag_value=flag_value,
+        multiple=multiple,
+        callback=callback,
     )
     return op
 
@@ -51,7 +81,9 @@ def parser_to_click(parser, callback, **kwargs):
     # Convert each of the optparse options.
     params = []
     for option in parser.option_list:
-        params.append(option_to_click(option))
+        param = option_to_click(option)
+        if param:
+            params.append(param)
 
     # Add a click argument to gobble up all of the positional arguments.
     # (In optparse, these are not declared: it's entirely up to the
