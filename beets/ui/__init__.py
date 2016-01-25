@@ -859,6 +859,11 @@ class Command(click.Command):
 
 
 class BeetsCommand(click.MultiCommand):
+    """The root CLI command for the `beet` executable.
+
+    The subcommand objects can be instances of our custom :cls:`Command`
+    class, in which case their aliases are respected.
+    """
 
     def _commands(self, ctx):
         # FIXME: Awful performance, cache per ctx
@@ -1026,12 +1031,11 @@ class LegacySubcommand(object):
     """A backwards-compatibility shim for code that still uses the
     `optparse` API. We translate these into Click commands.
     """
-    def __init__(self, name, parser=None, help='', aliases=(), hide=False):
+    def __init__(self, name, parser=None, help='', aliases=()):
         self.name = name
         self.parser = parser or LegacyOptionsParser()
         self.aliases = aliases
         self.help = help
-        self.hide = hide
 
     def _to_click(self, ctx):
         """Create a `click.Command` from the `OptionParser`.
