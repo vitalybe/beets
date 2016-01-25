@@ -32,21 +32,30 @@ def option_to_click(option):
     multiple = False
     callback = None
     flag_value = None
+    nargs = option.nargs
+    default = option.default
 
     if option.action == 'store_true':
         is_flag = True
         flag_value = True
+        default = False
 
     elif option.action == 'store_false':
         is_flag = True
         flag_value = False
+        default = True
 
     elif option.action == 'append':
         multiple = True
 
     elif option.action == 'callback':
-        # TODO Adjust signature.
-        callback = option.callback
+        def option_callback_shim(ctx, param, value):
+            pass
+            # option.callback(option, opt, value, parser,
+            # *option.callback_args,
+            # **option.callback_kwargs)
+        callback = option_callback_shim
+        nargs = None
 
     elif option.action == 'help':
         return None
@@ -62,8 +71,8 @@ def option_to_click(option):
 
         help=option.help,
         metavar=option.metavar,
-        nargs=option.nargs,
-        default=option.default,
+        nargs=nargs,
+        default=default,
 
         is_flag=is_flag,
         flag_value=flag_value,
