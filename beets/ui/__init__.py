@@ -833,42 +833,6 @@ class CommonOptionsParser(optparse.OptionParser, object):
         self.add_format_option()
 
 
-class LegacySubcommand(object):
-    """A backwards-compatibility shim for code that still uses the
-    `optparse` API. We translate these into Click commands.
-    """
-    def __init__(self, name, parser=None, help='', aliases=(), hide=False):
-        self.name = name
-        self.parser = parser or CommonOptionsParser()
-        self.aliases = aliases
-        self.help = help
-        self.hide = hide
-
-    def _to_click(self, ctx):
-        """Create a `click.Command` from the `OptionParser`.
-        """
-        # The callback gets the beets Context and invokes the
-        # appropriate command. Using a default argument here is
-        # a *totally hacky* way around Python's ordinary
-        # variable scoping, which doesn't let this closure
-        # capture the *current* value of `command` (i.e., later
-        # mutations confuse it).
-        def callback(opts, args, func=self.func):
-            func(ctx.find_object(Context).lib, opts, args)
-
-        return optparse2click.parser_to_click(
-            self.parser,
-            callback,
-            cls=AliasedSubcommand,
-            name=self.name,
-            help=self.help,
-            aliases=self.aliases,
-        )
-
-
-Subcommand = LegacySubcommand
-
-
 # The main entry point and bootstrapping.
 
 def _load_plugins(config):
@@ -1006,6 +970,42 @@ class AliasedSubcommand(click.Command):
         if self.aliases:
             value += '\n\nCommand aliases: {}'.format(' '.join(self.aliases))
         self._help = value
+
+
+class LegacySubcommand(object):
+    """A backwards-compatibility shim for code that still uses the
+    `optparse` API. We translate these into Click commands.
+    """
+    def __init__(self, name, parser=None, help='', aliases=(), hide=False):
+        self.name = name
+        self.parser = parser or CommonOptionsParser()
+        self.aliases = aliases
+        self.help = help
+        self.hide = hide
+
+    def _to_click(self, ctx):
+        """Create a `click.Command` from the `OptionParser`.
+        """
+        # The callback gets the beets Context and invokes the
+        # appropriate command. Using a default argument here is
+        # a *totally hacky* way around Python's ordinary
+        # variable scoping, which doesn't let this closure
+        # capture the *current* value of `command` (i.e., later
+        # mutations confuse it).
+        def callback(opts, args, func=self.func):
+            func(ctx.find_object(Context).lib, opts, args)
+
+        return optparse2click.parser_to_click(
+            self.parser,
+            callback,
+            cls=AliasedSubcommand,
+            name=self.name,
+            help=self.help,
+            aliases=self.aliases,
+        )
+
+
+Subcommand = LegacySubcommand  # The old name.
 
 
 class BeetsCommand(click.MultiCommand):

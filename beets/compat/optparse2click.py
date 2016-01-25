@@ -51,9 +51,14 @@ def option_to_click(option):
     elif option.action == 'help':
         return None
 
+    # Get the flags and, if specified, the destination name.
+    decls = []
+    decls = option._long_opts + option._short_opts
+    if option.dest:
+        decls.append(option.dest)
+
     op = click.Option(
-        # The option names (and spelling).
-        option._long_opts + option._short_opts + [option.dest],
+        decls,
 
         help=option.help,
         metavar=option.metavar,
