@@ -877,41 +877,6 @@ class AliasGroup(click.Group):
         return self.commands_by_alias.get(name)
 
 
-class BeetsCommand(AliasGroup):
-    """The root CLI command for the `beet` executable.
-    """
-    def load_commands(self):
-        """Using the current beets configuration, load the set of
-        subcommands for the `beet` executable. Any previously loaded
-        commands in `self.commands` are cleared.
-        """
-        # The built-in commands.
-        from beets.ui.commands import default_commands
-        subcommands = list(default_commands)
-
-        # Commands from plugins.
-        subcommands.extend(plugins.commands())
-
-        # Populate the commands dict.
-        self.commands = {}
-        for command in subcommands:
-            # For compatibility, convert old optparse-based commands
-            # into Click commands.
-            if isinstance(command, LegacySubcommand):
-                command = command._to_click()
-            self.add_command(command)
-
-    def invoke(self, ctx):
-        # Configure beets and load the plugins accordingly.
-        config = _configure(ctx.params)
-        _load_plugins(config)
-
-        # Populate this top-level command with its subcommands.
-        self.load_commands()
-
-        return super(BeetsCommand, self).invoke(ctx)
-
-
 class Context(object):
     """A context object that is passed to each command callback.
     """
@@ -1079,6 +1044,41 @@ Subcommand = LegacySubcommand  # The old name.
 
 # The main entry point.
 
+class BeetsCommand(AliasGroup):
+    """The root CLI command class for the `beet` executable.
+    """
+    def load_commands(self):
+        """Using the current beets configuration, load the set of
+        subcommands for the `beet` executable. Any previously loaded
+        commands in `self.commands` are cleared.
+        """
+        # The built-in commands.
+        from beets.ui.commands import default_commands
+        subcommands = list(default_commands)
+
+        # Commands from plugins.
+        subcommands.extend(plugins.commands())
+
+        # Populate the commands dict.
+        self.commands = {}
+        for command in subcommands:
+            # For compatibility, convert old optparse-based commands
+            # into Click commands.
+            if isinstance(command, LegacySubcommand):
+                command = command._to_click()
+            self.add_command(command)
+
+    def invoke(self, ctx):
+        # Configure beets and load the plugins accordingly.
+        config = _configure(ctx.params)
+        _load_plugins(config)
+
+        # Populate this top-level command with its subcommands.
+        self.load_commands()
+
+        return super(BeetsCommand, self).invoke(ctx)
+
+
 @click.command(cls=BeetsCommand,
                context_settings={'help_option_names': ['-h', '--help']})
 @format_option(flags=('--format-item',), target=library.Item)
@@ -1098,9 +1098,6 @@ def beet(ctx, **options):
     There is no top-level exception handling here. To print pretty error
     messages, invoke `main` instead.
     """
-    if ctx.invoked_subcommand == 'config':
-        return
-
     beets_ctx = ctx.ensure_object(Context)
     beets_ctx.lib = _setup(beets_ctx.lib)
 
