@@ -99,16 +99,15 @@ def option_to_click(option):
     return op
 
 
-def parser_to_click(parser, callback, cls=click.Command, **kwargs):
+def parser_to_click(parser, cls=click.Command, **kwargs):
     """Convert an `optparse.OptionParser` to a `click.Command`.
 
-    `parser` is the `OptionParser`. `func` is the callback to be invoked
-    for the command; its arguments are `opts`, a namespace object for
-    the named options, and `args`, a list of positional arguments.
-    `cls` is the `Command` subclass to instantiate.
+    `parser` is the `OptionParser`. `cls` is the `Command` subclass to
+    instantiate. All other keyword arguments are passed through to the
+    `Command` constructor.
 
-    All other keyword arguments are passed through to the `Command`
-    constructor.
+    You probably want to assign the command's `callback` member after
+    constructing it here.
     """
     # Convert each of the optparse options.
     params = []
@@ -122,17 +121,21 @@ def parser_to_click(parser, callback, cls=click.Command, **kwargs):
     # application to handle the list of strings that are passed.)
     params.append(click.Argument(['args'], nargs=-1))
 
-    # Handle the callback and translate to the `optparse` arguments.
-    def shim_callback(**kwargs):
-        # Get the positional arguments.
-        args = kwargs.pop('args')
-
-        # Turn the rest of the arguments into a namespace object.
-        opts = optparse.Values()
-        for key, value in kwargs.items():
-            setattr(opts, key, value)
-
-        callback(opts, args)
-
     # Construct the Click command object.
-    return cls(params=params, callback=shim_callback, **kwargs)
+    return cls(params=params, **kwargs)
+
+
+def opts_and_args(kwargs):
+    """Given the keyword arguments passed to a Click callback, produce
+    equivalent `opts` and `args` values that resemble the return value
+    from optparse.
+    """
+    # Get the positional arguments.
+    args = kwargs.pop('args')
+
+    # Turn the rest of the arguments into a namespace object.
+    opts = optparse.Values()
+    for key, value in kwargs.items():
+        setattr(opts, key, value)
+
+    return opts, args

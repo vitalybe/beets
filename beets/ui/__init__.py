@@ -855,53 +855,61 @@ class Command(click.Command):
         super(Command, self).format_epilog(ctx, formatter)
 
 
-class BeetsCommand(click.MultiCommand):
-    """The root CLI command for the `beet` executable.
-
-    The subcommand objects can be instances of our custom :cls:`Command`
-    class, in which case their aliases are respected.
+class AliasGroup(click.Group):
+    """A `MultiCommand` variant whose subcommands can have aliases.
     """
-
-    def _commands(self, ctx):
-        # FIXME: Awful performance, cache per ctx
-        from beets.ui.commands import default_commands
-
-        config = _configure(ctx.params)
-        _load_plugins(config)
-
-        subcommands = list(default_commands)
-        subcommands.extend(plugins.commands())
-
+    @property
+    def commands_by_alias(self):
+        """A dictionary mapping names to commands, including by their
+        aliases (if any).
+        """
         out = {}
-
-        for command in subcommands:
-            # For compatibility, convert old optparse-based commands
-            # into Click commands.
-            if isinstance(command, LegacySubcommand):
-                command = command._to_click(ctx)
-
-            # Register the alias names.
+        for command in self.commands.values():
             out[command.name] = command
             if hasattr(command, 'aliases'):
                 for alias in command.aliases:
                     out[alias] = command
-
         return out
 
-    def list_commands(self, ctx):
-        # Skip aliases for help page
-        return set(command.name for command in self._commands(ctx).values())
-
     def get_command(self, ctx, name):
-        # Special case for the `config --edit` command: bypass loading config
-        # so that an invalid configuration does not prevent the editor from
-        # starting.
-        if ctx.args and ctx.args[0] == 'config' and \
-           ('-e' in ctx.args or '--edit' in ctx.args):
-            from beets.ui.commands import config_cmd
-            return config_cmd
+        """Look up commands by name or alias.
+        """
+        return self.commands_by_alias.get(name)
 
-        return self._commands(ctx).get(name)
+
+class BeetsCommand(AliasGroup):
+    """The root CLI command for the `beet` executable.
+    """
+    def load_commands(self):
+        """Using the current beets configuration, load the set of
+        subcommands for the `beet` executable. Any previously loaded
+        commands in `self.commands` are cleared.
+        """
+        # The built-in commands.
+        from beets.ui.commands import default_commands
+        subcommands = list(default_commands)
+
+        # Commands from plugins.
+        subcommands.extend(plugins.commands())
+
+        # Populate the commands dict.
+        self.commands = {}
+        for command in subcommands:
+            # For compatibility, convert old optparse-based commands
+            # into Click commands.
+            if isinstance(command, LegacySubcommand):
+                command = command._to_click()
+            self.add_command(command)
+
+    def invoke(self, ctx):
+        # Configure beets and load the plugins accordingly.
+        config = _configure(ctx.params)
+        _load_plugins(config)
+
+        # Populate this top-level command with its subcommands.
+        self.load_commands()
+
+        return super(BeetsCommand, self).invoke(ctx)
 
 
 class Context(object):
@@ -1034,27 +1042,26 @@ class LegacySubcommand(object):
         self.aliases = aliases
         self.help = help
 
-    def _to_click(self, ctx):
+    def _to_click(self):
         """Create a `click.Command` from the `OptionParser`.
         """
-        # The callback gets the beets Context and invokes the
-        # appropriate command. Using a default argument here is
-        # a *totally hacky* way around Python's ordinary
-        # variable scoping, which doesn't let this closure
-        # capture the *current* value of `command` (i.e., later
-        # mutations confuse it).
-        def callback(opts, args, func=self.func):
-            func(ctx.find_object(Context).lib, opts, args)
-
         # Convert from the OptionParser instance to a Command.
         command = optparse2click.parser_to_click(
             self.parser,
-            callback,
             cls=Command,
             name=self.name,
             help=self.help,
             aliases=self.aliases,
         )
+
+        # The callback for the command. Legacy callbacks take three
+        # parameters: the library, options (an optparse namespace), and
+        # args (a string list).
+        def callback(**kwargs):
+            opts, args = optparse2click.opts_and_args(kwargs)
+            lib = click.get_current_context().find_object(Context).lib
+            self.func(lib, opts, args)
+        command.callback = callback
 
         # Unspool the requested "shortcut" options.
         if self.parser._album_option:
