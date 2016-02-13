@@ -1073,20 +1073,6 @@ class LegacySubcommand(object):
 Subcommand = LegacySubcommand  # The old name.
 
 
-# TODO `main` should be the command; not `_raw_main`.
-@click.command(cls=BeetsCommand,
-               context_settings={'help_option_names': ['-h', '--help']})
-@format_option(flags=('--format-item',), target=library.Item)
-@format_option(flags=('--format-album',), target=library.Album)
-@click.option('-l', '--library', metavar='LIBRARY',
-              help='Library database file to use.')
-@click.option('-d', '--directory', metavar='DIRECTORY',
-              help='Destination music directory.')
-@click.option('-v', '--verbose', count=True,
-              help='Print debugging information.')
-@click.option('-c', '--config', metavar='CONFIG',
-              help='Path to configuration file.')
-@click.pass_context
 def _raw_main(ctx, **options):
     """A helper function for `main` without top-level exception
     handling.
@@ -1102,12 +1088,25 @@ def _raw_main(ctx, **options):
         plugins.send('cli_exit', lib=beets_ctx.lib)
 
 
-def main(args=None):
+@click.command(cls=BeetsCommand,
+               context_settings={'help_option_names': ['-h', '--help']})
+@format_option(flags=('--format-item',), target=library.Item)
+@format_option(flags=('--format-album',), target=library.Album)
+@click.option('-l', '--library', metavar='LIBRARY',
+              help='Library database file to use.')
+@click.option('-d', '--directory', metavar='DIRECTORY',
+              help='Destination music directory.')
+@click.option('-v', '--verbose', count=True,
+              help='Print debugging information.')
+@click.option('-c', '--config', metavar='CONFIG',
+              help='Path to configuration file.')
+@click.pass_context
+def main(ctx, **options):
     """Run the main command-line interface for beets. Includes top-level
     exception handlers that print friendly error messages.
     """
     try:
-        _raw_main(args)
+        _raw_main(ctx, **options)
     except UserError as exc:
         message = exc.args[0] if exc.args else None
         log.error(u'error: {0}', message)
