@@ -1079,21 +1079,6 @@ Subcommand = LegacySubcommand  # The old name.
 
 # The main entry point.
 
-def _raw_main(ctx, **options):
-    """A helper function for `main` without top-level exception
-    handling.
-    """
-    if ctx.invoked_subcommand == 'config':
-        return
-
-    beets_ctx = ctx.ensure_object(Context)
-    beets_ctx.lib = _setup(beets_ctx.lib)
-
-    @ctx.call_on_close
-    def send_plugin_cli_exit():
-        plugins.send('cli_exit', lib=beets_ctx.lib)
-
-
 @click.command(cls=BeetsCommand,
                context_settings={'help_option_names': ['-h', '--help']})
 @format_option(flags=('--format-item',), target=library.Item)
@@ -1107,12 +1092,32 @@ def _raw_main(ctx, **options):
 @click.option('-c', '--config', metavar='CONFIG',
               help='Path to configuration file.')
 @click.pass_context
-def main(ctx, **options):
-    """Run the main command-line interface for beets. Includes top-level
-    exception handlers that print friendly error messages.
+def beet(ctx, **options):
+    """The main command entry for the beets CLI.
+
+    There is no top-level exception handling here. To print pretty error
+    messages, invoke `main` instead.
+    """
+    if ctx.invoked_subcommand == 'config':
+        return
+
+    beets_ctx = ctx.ensure_object(Context)
+    beets_ctx.lib = _setup(beets_ctx.lib)
+
+    @ctx.call_on_close
+    def send_plugin_cli_exit():
+        plugins.send('cli_exit', lib=beets_ctx.lib)
+
+
+def main():
+    """Run the main command-line interface for beets.
+
+    Includes top-level exception handlers that print friendly error
+    messages. There is no command-line parsing here; that happens in the
+    helper, `beet`.
     """
     try:
-        _raw_main(ctx, **options)
+        beet()
     except UserError as exc:
         message = exc.args[0] if exc.args else None
         log.error(u'error: {0}', message)
