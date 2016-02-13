@@ -1068,15 +1068,25 @@ class BeetsCommand(AliasGroup):
                 command = command._to_click()
             self.add_command(command)
 
-    def invoke(self, ctx):
-        # Configure beets and load the plugins accordingly.
+    def resolve_command(self, ctx, args):
+        # Special case for the `config --edit` command. This bypasses
+        # all of the normal beets initialization so the command can
+        # succeed even with a broken configuration.
+        str_args = [click.utils.make_str(a) for a in args]
+        if str_args[0] == 'config' and ('-e' in str_args or
+                                        '--edit' in str_args):
+            from beets.ui.commands import config_cmd
+            command = config_cmd._to_click()
+            return str_args[0], command, args[1:]
+
+        # In the normal case, configure beets and then load the set of
+        # subcommands immediately before continuing with the resolution
+        # logic.
         config = _configure(ctx.params)
         _load_plugins(config)
-
-        # Populate this top-level command with its subcommands.
         self.load_commands()
 
-        return super(BeetsCommand, self).invoke(ctx)
+        return super(BeetsCommand, self).resolve_command(ctx, args)
 
 
 @click.command(cls=BeetsCommand,
