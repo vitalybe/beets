@@ -1534,8 +1534,10 @@ default_commands.append(write_cmd)
 # config: Show and edit user configuration.
 
 def config_func(lib, opts, args):
-    # Make sure lazy configuration is loaded
-    config.resolve()
+    # Make sure lazy configuration is loaded, unless we're just editing
+    # the file.
+    if not opts.edit:
+        config.resolve()
 
     # Print paths.
     if opts.paths:

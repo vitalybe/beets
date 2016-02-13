@@ -739,23 +739,6 @@ def _load_plugins(config):
     return plugins
 
 
-def _setup(lib=None):
-    """Prepare and global state and updates it with command line options.
-
-    Returns a list of subcommands, a list of plugins, and a library instance.
-    """
-    # Configure the MusicBrainz API.
-    mb.configure()
-
-    if lib is None:
-        lib = _open_library(config)
-        plugins.send("library_opened", lib=lib)
-    library.Item._types.update(plugins.types(library.Item))
-    library.Album._types.update(plugins.types(library.Album))
-
-    return lib
-
-
 def _configure(options):
     """Amend the global configuration object with command line options.
     """
@@ -1109,8 +1092,25 @@ def beet(ctx, **options):
     messages, invoke `main` instead.
     """
     beets_ctx = ctx.ensure_object(Context)
-    beets_ctx.lib = _setup(beets_ctx.lib)
 
+    # Special case for the config command: avoid doing any setup that
+    # requires parsing the configuration.
+    if ctx.invoked_subcommand == 'config':
+        return
+
+    # Configure the MusicBrainz API.
+    mb.configure()
+
+    # Open the library database and set it on the context.
+    lib = _open_library(config)
+    plugins.send("library_opened", lib=lib)
+    beets_ctx.lib = lib
+
+    # Load field types from the plugins.
+    library.Item._types.update(plugins.types(library.Item))
+    library.Album._types.update(plugins.types(library.Album))
+
+    # Tell plugins when the subcommand invocation is finished.
     @ctx.call_on_close
     def send_plugin_cli_exit():
         plugins.send('cli_exit', lib=beets_ctx.lib)
