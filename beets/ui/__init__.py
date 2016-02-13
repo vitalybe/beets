@@ -32,6 +32,7 @@ import re
 import struct
 import traceback
 import os.path
+import itertools
 
 from beets import logging
 from beets import library
@@ -841,21 +842,17 @@ class Command(click.Command):
     """
     def __init__(self, *args, **kwargs):
         aliases = kwargs.pop('aliases', ())
-        self._help = ''
         self.aliases = aliases
+
         click.Command.__init__(self, *args, **kwargs)
 
-    # TODO Remove this property in favor of modifying the formatter.
-    @property
-    def help(self):
-        return self._help
-
-    @help.setter
-    def help(self, value):
-        value = value or ''
+    # Add the aliases to the end of the help output for the command.
+    def format_epilog(self, ctx, formatter):
         if self.aliases:
-            value += '\n\nCommand aliases: {}'.format(' '.join(self.aliases))
-        self._help = value
+            names = itertools.chain((self.name,), self.aliases)
+            formatter.write_paragraph()
+            formatter.write_text('Aliases: {}'.format(', '.join(names)))
+        super(Command, self).format_epilog(ctx, formatter)
 
 
 class BeetsCommand(click.MultiCommand):
@@ -1072,6 +1069,8 @@ class LegacySubcommand(object):
 
 Subcommand = LegacySubcommand  # The old name.
 
+
+# The main entry point.
 
 def _raw_main(ctx, **options):
     """A helper function for `main` without top-level exception
