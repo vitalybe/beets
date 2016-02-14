@@ -159,8 +159,9 @@ class ModifyTest(unittest.TestCase, TestHelper):
         self.teardown_beets()
 
     def modify(self, *args):
+        params = ('modify',) + args
         with control_stdin('y'):
-            ui._raw_main(['modify'] + list(args), self.lib)
+            self.run_command(params)
 
     # Item tests
 
@@ -308,7 +309,9 @@ class WriteTest(unittest.TestCase, TestHelper):
         self.teardown_beets()
 
     def write_cmd(self, *args):
-        ui._raw_main(['write'] + list(args), self.lib)
+        params = ('write',) + args
+        with control_stdin('y'):
+            self.run_command(params)
 
     def test_update_mtime(self):
         item = self.add_item_fixture()
@@ -658,7 +661,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with self.write_config_file() as config:
             config.write('paths: {x: y}')
 
-        ui._raw_main(['test'])
+        self.run_command('test')
         key, template = self.test_cmd.lib.path_formats[0]
         self.assertEqual(key, 'x')
         self.assertEqual(template.original, 'y')
@@ -670,7 +673,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with self.write_config_file() as config:
             config.write('paths: {x: y}')
 
-        ui._raw_main(['test'])
+        self.run_command('test')
         key, template = self.test_cmd.lib.path_formats[0]
         self.assertEqual(key, 'x')
         self.assertEqual(template.original, 'y')
@@ -682,7 +685,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
             config.write('library: /xxx/yyy/not/a/real/path')
 
         with self.assertRaises(ui.UserError):
-            ui._raw_main(['test'])
+            self.run_command('test')
 
     def test_user_config_file(self):
         with self.write_config_file() as file:
@@ -695,7 +698,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with self.write_config_file() as config:
             config.write("replace: {'[xy]': z}")
 
-        ui._raw_main(['test'])
+        self.run_command('test')
         replacements = self.test_cmd.lib.replacements
         self.assertEqual(replacements, [(re.compile(r'[xy]'), b'z')])
 
@@ -703,7 +706,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with self.write_config_file() as config:
             config.write("replace: {'[xy]': z, foo: bar}")
 
-        ui._raw_main(['test'])
+        self.run_command('test')
         replacements = self.test_cmd.lib.replacements
         self.assertEqual(replacements, [
             (re.compile(r'[xy]'), 'z'),
@@ -753,8 +756,8 @@ class ConfigTest(unittest.TestCase, TestHelper):
 #        with open(cli_config_path_2, 'w') as file:
 #            file.write('second: value')
 #
-#        ui._raw_main(['--config', cli_config_path_1,
-#                      '--config', cli_config_path_2, 'test'])
+#        self.run_command('--config', cli_config_path_1,
+#                         '--config', cli_config_path_2, 'test')
 #        self.assertEqual(config['first'].get(), 'value')
 #        self.assertEqual(config['second'].get(), 'value')
 #
@@ -770,8 +773,8 @@ class ConfigTest(unittest.TestCase, TestHelper):
 #        with open(cli_overwrite_config_path, 'w') as file:
 #            file.write('anoption: overwrite')
 #
-#        ui._raw_main(['--config', cli_config_path,
-#                      '--config', cli_overwrite_config_path, 'test'])
+#        self.run_command('--config', cli_config_path,
+#                         '--config', cli_overwrite_config_path, 'test')
 #        self.assertEqual(config['anoption'].get(), 'cli overwrite')
 
     def test_cli_config_paths_resolve_relative_to_user_dir(self):
@@ -1075,7 +1078,7 @@ class CompletionTest(_common.TestCase):
 
         # Load completion script.
         self.io.install()
-        ui._raw_main(['completion'])
+        self.run_command('completion')
         completion_script = self.io.getoutput()
         self.io.restore()
         tester.stdin.writelines(completion_script)
