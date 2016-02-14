@@ -411,13 +411,13 @@ class TestHelper(object):
         runner = click.testing.CliRunner(charset='utf-8')
         if setup_ctx:
             ctx = beets.ui.Context(
-                lib=getattr(self, 'lib') or Library(':memory:')
+                lib=getattr(self, 'lib', None) or Library(':memory:')
             )
         else:
             ctx = None
 
         def invoke(args, **kwargs):
-            rv = runner.invoke(beets.ui._raw_main, args=args, obj=ctx,
+            rv = runner.invoke(beets.ui.beet, args=args, obj=ctx,
                                catch_exceptions=False, **kwargs)
             return rv
 
