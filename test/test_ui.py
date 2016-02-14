@@ -688,7 +688,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with self.write_config_file() as file:
             file.write('anoption: value')
 
-        ui._raw_main(['test'])
+        self.run_command('test')
         self.assertEqual(config['anoption'].get(), 'value')
 
     def test_replacements_parsed(self):
@@ -715,7 +715,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with open(config_path, 'w') as file:
             file.write('anoption: value')
 
-        ui._raw_main(['--config', config_path, 'test'])
+        self.run_command('--config', config_path, 'test')
         self.assertEqual(config['anoption'].get(), 'value')
 
     def test_cli_config_file_overwrites_user_defaults(self):
@@ -726,7 +726,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with open(cli_config_path, 'w') as file:
             file.write('anoption: cli overwrite')
 
-        ui._raw_main(['--config', cli_config_path, 'test'])
+        self.run_command('--config', cli_config_path, 'test')
         self.assertEqual(config['anoption'].get(), 'cli overwrite')
 
     def test_cli_config_file_overwrites_beetsdir_defaults(self):
@@ -739,7 +739,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
         with open(cli_config_path, 'w') as file:
             file.write('anoption: cli overwrite')
 
-        ui._raw_main(['--config', cli_config_path, 'test'])
+        self.run_command('--config', cli_config_path, 'test')
         self.assertEqual(config['anoption'].get(), 'cli overwrite')
 
 #    @unittest.skip('Difficult to implement with optparse')
@@ -780,7 +780,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
             file.write('library: beets.db\n')
             file.write('statefile: state')
 
-        ui._raw_main(['--config', cli_config_path, 'test'])
+        self.run_command('--config', cli_config_path, 'test')
         self.assertEqual(config['library'].as_filename(),
                          os.path.join(self.user_config_dir, 'beets.db'))
         self.assertEqual(config['statefile'].as_filename(),
@@ -794,7 +794,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
             file.write('library: beets.db\n')
             file.write('statefile: state')
 
-        ui._raw_main(['--config', cli_config_path, 'test'])
+        self.run_command('--config', cli_config_path, 'test')
         self.assertEqual(config['library'].as_filename(),
                          os.path.join(self.beetsdir, 'beets.db'))
         self.assertEqual(config['statefile'].as_filename(),
@@ -802,7 +802,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
 
     def test_command_line_option_relative_to_working_dir(self):
         os.chdir(self.temp_dir)
-        ui._raw_main(['--library', 'foo.db', 'test'])
+        self.run_command('--library', 'foo.db', 'test')
         self.assertEqual(config['library'].as_filename(),
                          os.path.join(os.getcwd(), 'foo.db'))
 
@@ -814,7 +814,7 @@ class ConfigTest(unittest.TestCase, TestHelper):
             file.write('pluginpath: %s\n' % plugin_path)
             file.write('plugins: test')
 
-        ui._raw_main(['--config', cli_config_path, 'plugin'])
+        self.run_command('--config', cli_config_path, 'plugin')
         self.assertTrue(plugins.find_plugins()[0].is_test_plugin)
 
     def test_beetsdir_config(self):
@@ -831,7 +831,8 @@ class ConfigTest(unittest.TestCase, TestHelper):
         beetsdir = os.path.join(self.temp_dir, 'beetsfile')
         open(beetsdir, 'a').close()
         os.environ['BEETSDIR'] = beetsdir
-        self.assertRaises(ConfigError, ui._raw_main, ['test'])
+        with self.assertRaises(ConfigError):
+            self.run_command('test')
 
     def test_beetsdir_config_does_not_load_default_user_config(self):
         os.environ['BEETSDIR'] = self.beetsdir
@@ -1038,11 +1039,11 @@ class PathFormatTest(_common.TestCase):
 
 
 @_common.slow_test()
-class PluginTest(_common.TestCase):
+class PluginTest(_common.TestCase, TestHelper):
     def test_plugin_command_from_pluginpath(self):
         config['pluginpath'] = [os.path.join(_common.RSRC, 'beetsplug')]
         config['plugins'] = ['test']
-        ui._raw_main(['test'])
+        self.run_command('test')
 
 
 @_common.slow_test()
