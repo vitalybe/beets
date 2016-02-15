@@ -27,7 +27,7 @@ import click
 
 import beets
 from beets import ui
-from beets.ui import print_, input_, decargs, show_path_changes
+from beets.ui import print_, input_, decargs, show_path_changes, cli
 from beets import autotag
 from beets.autotag import Recommendation
 from beets.autotag import hooks
@@ -104,7 +104,7 @@ default_commands.append(fields_cmd)
 
 @click.command('help',
                short_help='give detailed help on a specific sub-command',
-               cls=ui.Command)
+               cls=cli.Command)
 @click.pass_context
 @click.argument('command', required=False)
 def help_cmd(ctx, command):
