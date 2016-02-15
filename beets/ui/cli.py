@@ -206,6 +206,13 @@ def path_option(f):
 
 
 def format_option(flags=('-f', '--format'), target=None):
+    """Add an -f/--format option that sets the output format for albums
+    or items.
+
+    Whether this affects albums or items is controlled by the separate
+    album options (created the `album_option` decorator). It sets either
+    `format_album` or `format_item` in the global configuration.
+    """
     def callback(ctx, param, value):
         if not value:
             return
@@ -236,6 +243,8 @@ def format_option(flags=('-f', '--format'), target=None):
 
 
 def all_common_options(f):
+    """Add the `--album`, `--path`, and `--format` command-line options.
+    """
     return album_option(path_option(format_option()(f)))
 
 
