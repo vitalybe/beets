@@ -54,6 +54,7 @@ from beets import importer
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.mediafile import MediaFile, Image
 from beets.ui import _arg_encoding
+import beets.ui.cli
 
 # TODO Move AutotagMock here
 from test import _common
@@ -410,7 +411,7 @@ class TestHelper(object):
     def get_click_runner(self, setup_ctx=True):
         runner = click.testing.CliRunner(charset='utf-8')
         if setup_ctx:
-            ctx = beets.ui.Context(
+            ctx = beets.ui.cli.Context(
                 lib=getattr(self, 'lib', None) or Library(':memory:')
             )
         else:
