@@ -244,6 +244,17 @@ def stats():
     })
 
 
+# Smart playlists
+
+@app.route('/playlists')
+def playlist():
+    return flask.jsonify({
+        'playlists': [
+            ".Metal",
+            ".NoMetal"
+        ]})
+
+
 # UI.
 
 @app.route('/')
