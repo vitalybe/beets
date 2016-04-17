@@ -25,7 +25,7 @@ from flask import g
 from werkzeug.routing import BaseConverter, PathConverter
 import os
 import json
-
+import logging
 
 # Utilities.
 
@@ -246,13 +246,26 @@ def stats():
 
 # Smart playlists
 
+smart_playlists = {
+    "Metal": (3, 4),
+    "NoMetal": (1, 2)
+}
+
 @app.route('/playlists')
-def playlist():
+def playlists():
     return flask.jsonify({
-        'playlists': [
-            ".Metal",
-            ".NoMetal"
-        ]})
+        'playlists': smart_playlists.keys()
+    })
+
+
+@app.route('/playlists/<queries>')
+@resource_query('playlist_items')
+def playlist_by_name(queries):
+    from beetsplug import vitaly_smart_playlists
+    min, max = smart_playlists[queries]
+    tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 10)
+
+    return tracks
 
 
 # UI.
