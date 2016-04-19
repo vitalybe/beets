@@ -16,12 +16,15 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
+from datetime import datetime
+import time
+
 from beets.plugins import BeetsPlugin
 from beets import ui
 from beets import util
 import beets.library
 import flask
-from flask import g
+from flask import g, request
 from werkzeug.routing import BaseConverter, PathConverter
 import os
 import json
@@ -266,6 +269,27 @@ def playlist_by_name(queries):
     tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 10)
 
     return tracks
+
+
+@app.route('/item/<id>/rating', methods=["PUT"])
+def update_rating(id):
+    track = g.lib.get_item(id)
+    track.itunes_rating = request.get_json()["newRating"]
+    with g.lib.transaction():
+        track.try_sync(True, False)
+
+    return "", 200
+
+
+@app.route('/item/<id>/last-played', methods=["POST"])
+def update_last_played(id):
+    track = g.lib.get_item(id)
+    track.itunes_playcount += 1
+    track.itunes_lastplayed = time.mktime(datetime.utcnow().timetuple())
+    with g.lib.transaction():
+        track.try_sync(True, False)
+
+    return "", 200
 
 
 # UI.
