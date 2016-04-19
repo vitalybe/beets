@@ -23,7 +23,7 @@ from __future__ import division, absolute_import, print_function
 import re
 from string import Template
 import traceback
-import random
+import random_song
 import time
 
 import beets
@@ -184,7 +184,7 @@ class BaseServer(object):
         self.error = None
 
         # Object for random numbers generation
-        self.random_obj = random.Random()
+        self.random_obj = random_song.Random()
 
     def run(self):
         """Block and start listening for connections from clients. An

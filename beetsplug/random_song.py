@@ -19,7 +19,7 @@ from __future__ import division, absolute_import, print_function
 
 from beets.plugins import BeetsPlugin
 from beets.ui import Subcommand, decargs, print_
-import random
+import random_song
 from operator import attrgetter
 from itertools import groupby
 
@@ -48,9 +48,9 @@ def random_item(lib, opts, args):
 
             # Choose an artist and an object for that artist, removing
             # this choice from the pool.
-            artist = random.choice(objs_by_artists.keys())
+            artist = random_song.choice(objs_by_artists.keys())
             objs_from_artist = objs_by_artists[artist]
-            i = random.randint(0, len(objs_from_artist) - 1)
+            i = random_song.randint(0, len(objs_from_artist) - 1)
             objs.append(objs_from_artist.pop(i))
 
             # Remove the artist if we've used up all of its objects.
@@ -59,7 +59,7 @@ def random_item(lib, opts, args):
 
     else:
         number = min(len(objs), opts.number)
-        objs = random.sample(objs, number)
+        objs = random_song.sample(objs, number)
 
     for item in objs:
         print_(format(item))
