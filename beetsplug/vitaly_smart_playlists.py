@@ -15,6 +15,7 @@
 """Adds support for ipfs. Requires go-ipfs and a running ipfs daemon
 """
 import sys
+import random
 from datetime import datetime
 
 from beets import ui, logging
@@ -35,6 +36,7 @@ class VitalySmartPlaylists(BeetsPlugin):
         cmd.parser.add_option(u'--max', dest='max_aggression', help="maximum aggression of songs (1-4)")
         cmd.parser.add_option(u'--min', dest='min_aggression', help="minimum aggression of songs (1-4)")
         cmd.parser.add_option(u'-c', u'--count', dest='count', help="generated track count")
+        cmd.parser.add_option(u'-s', u'--shuffle', action='store_true', help="shuffle the result")
 
         def func(lib, opts, args):
 
@@ -43,7 +45,8 @@ class VitalySmartPlaylists(BeetsPlugin):
             count = int(opts.count)
 
             query = decargs(args)
-            items = generate_playlist(lib, int(min_aggression), int(max_aggression), count, " ".join(query))
+            items = generate_playlist(lib, int(min_aggression), int(max_aggression), count,
+                                      opts.shuffle, " ".join(query))
 
             for item in items:
                 score_string = ", ".join(['%s: %s' % (key.replace("rule_", ""), value) for (key, value) in sorted(item.scores.items())])
@@ -142,7 +145,7 @@ def post_rule_limit_artists(sorted_tracks):
             artists[track.artist] = 0
 
 
-def generate_playlist(lib, min_aggression, max_aggression, count, input_query=""):
+def generate_playlist(lib, min_aggression, max_aggression, count, shuffle, input_query=""):
     # TODO: Validate aggression (int, min, max)
     # TODO: accept range of aggression and query by aggression::[234] (ranges don't work since it is stored as string)
 
@@ -162,8 +165,8 @@ def generate_playlist(lib, min_aggression, max_aggression, count, input_query=""
     post_rule_limit_artists(sorted_tracks)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
 
-    return sorted_tracks[0:count]
+    trimmed_tracks = sorted_tracks[0:count]
+    if shuffle:
+        random.shuffle(trimmed_tracks)
 
-
-
-
+    return trimmed_tracks

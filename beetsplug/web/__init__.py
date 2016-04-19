@@ -266,7 +266,7 @@ def playlists():
 def playlist_by_name(queries):
     from beetsplug import vitaly_smart_playlists
     min, max = smart_playlists[queries]
-    tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 10)
+    tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 30, True)
 
     return tracks
 
