@@ -37,6 +37,6 @@ htmlcov/*
 .noseids
 *.egg
 test/rsrc/lyrics/*
-
+docker/history-log.txt
 # Vitaly
 data/*

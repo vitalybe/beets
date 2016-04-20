@@ -625,9 +625,12 @@ class DateQuery(FieldQuery):
         self.interval = DateInterval.from_periods(start, end)
 
     def match(self, item):
-        timestamp = float(item[self.field])
-        date = datetime.utcfromtimestamp(timestamp)
-        return self.interval.contains(date)
+        if self.field in item:
+            timestamp = float(item[self.field])
+            date = datetime.utcfromtimestamp(timestamp)
+            return self.interval.contains(date)
+        else:
+            return False
 
     _clause_tmpl = "{0} {1} ?"
 
@@ -855,3 +858,4 @@ class NullSort(Sort):
 
     def __hash__(self):
         return 0
+

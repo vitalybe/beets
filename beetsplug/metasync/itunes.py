@@ -94,25 +94,31 @@ class Itunes(MetaSource):
             raise ConfigValueError(u'invalid iTunes library' + hint)
 
         # Make the iTunes library queryable using the path
-        self.collection = {_norm_itunes_path(track['Location']): track
+        self.collection = {track['Artist'] + "-" + track["Name"]: track
                            for track in raw_library['Tracks'].values()
                            if 'Location' in track}
 
     def sync_from_source(self, item):
-        result = self.collection.get(util.bytestring_path(item.path).lower())
+        target = item.artist + "-" + item.title
+        result = self.collection.get(target)
 
         if not result:
-            self._log.warning(u'no iTunes match found for {0}'.format(item))
+            self._log.warning(u'no iTunes match found for {0}'.format(urllib.quote(target)))
             return
 
         item.itunes_rating = result.get('Rating')
         item.itunes_playcount = result.get('Play Count')
         item.itunes_skipcount = result.get('Skip Count')
 
-        if result.get('Play Date UTC'):
-            item.itunes_lastplayed = mktime(
-                result.get('Play Date UTC').timetuple())
 
-        if result.get('Skip Date'):
-            item.itunes_lastskipped = mktime(
-                result.get('Skip Date').timetuple())
+        if result.get('Play Date UTC') and result.get('Play Date UTC').timetuple().tm_year >= 1970:
+            try:
+                item.itunes_lastplayed = mktime(result.get('Play Date UTC').timetuple())
+            except Exception as e:
+                print "\tDidn't last played date: " + str(e)
+
+        if result.get('Skip Date') and result.get('Skip Date').timetuple().tm_year >= 1970:
+            try:
+                item.itunes_lastskipped = mktime(result.get('Skip Date').timetuple())
+            except Exception as e:
+                print "\tDidn't set skip date: " + str(e)
