@@ -40,7 +40,9 @@ def _rep(obj, expand=False):
     out = dict(obj)
 
     if isinstance(obj, beets.library.Item):
-        del out['path']
+        music_folder_name = "\\beets-music\\"
+        headless_start_index = out['path'].find(music_folder_name) + len(music_folder_name)
+        out['path'] = out['path'][headless_start_index::]
 
         # Get the size (in bytes) of the backing file. This is useful
         # for the Tomahawk resolver API.
@@ -149,7 +151,7 @@ class QueryConverter(PathConverter):
     """
 
     def to_python(self, value):
-        return value.split('/'+secret+'/')
+        return value.split('/')
 
     def to_url(self, value):
         return ','.join(value)
@@ -161,143 +163,141 @@ app = flask.Flask(__name__)
 app.url_map.converters['idlist'] = IdListConverter
 app.url_map.converters['query'] = QueryConverter
 
-def create_routes(secret):
-
-    @app.before_request
-    def before_request():
-        g.lib = app.config['lib']
+@app.before_request
+def before_request():
+    g.lib = app.config['lib']
 
 
-    # Items.
+# Items.
 
-    @app.route('/'+secret+'/item/<idlist:ids>')
-    @resource('items')
-    def get_item(id):
-        return g.lib.get_item(id)
-
-
-    @app.route('/'+secret+'/item/')
-    @app.route('/'+secret+'/item/query/')
-    @resource_list('items')
-    def all_items():
-        return g.lib.items()
+@app.route('/item/<idlist:ids>')
+@resource('items')
+def get_item(id):
+    return g.lib.get_item(id)
 
 
-    @app.route('/'+secret+'/item/<int:item_id>/file')
-    def item_file(item_id):
-        item = g.lib.get_item(item_id)
-        response = flask.send_file(item.path, as_attachment=True,
-                                   attachment_filename=os.path.basename(item.path))
-        response.headers['Content-Length'] = os.path.getsize(item.path)
-        return response
+@app.route('/item/')
+@app.route('/item/query/')
+@resource_list('items')
+def all_items():
+    return g.lib.items()
 
 
-    @app.route('/'+secret+'/item/query/<query:queries>')
-    @resource_query('items')
-    def item_query(queries):
-        return g.lib.items(queries)
+@app.route('/item/<int:item_id>/file')
+def item_file(item_id):
+    item = g.lib.get_item(item_id)
+    response = flask.send_file(item.path, as_attachment=True,
+                               attachment_filename=os.path.basename(item.path))
+    response.headers['Content-Length'] = os.path.getsize(item.path)
+    return response
 
 
-    # Albums.
-
-    @app.route('/'+secret+'/album/<idlist:ids>')
-    @resource('albums')
-    def get_album(id):
-        return g.lib.get_album(id)
+@app.route('/item/query/<query:queries>')
+@resource_query('items')
+def item_query(queries):
+    return g.lib.items(queries)
 
 
-    @app.route('/'+secret+'/album/')
-    @app.route('/'+secret+'/album/query/')
-    @resource_list('albums')
-    def all_albums():
-        return g.lib.albums()
+# Albums.
+
+@app.route('/album/<idlist:ids>')
+@resource('albums')
+def get_album(id):
+    return g.lib.get_album(id)
 
 
-    @app.route('/'+secret+'/album/query/<query:queries>')
-    @resource_query('albums')
-    def album_query(queries):
-        return g.lib.albums(queries)
+@app.route('/album/')
+@app.route('/album/query/')
+@resource_list('albums')
+def all_albums():
+    return g.lib.albums()
 
 
-    @app.route('/'+secret+'/album/<int:album_id>/art')
-    def album_art(album_id):
-        album = g.lib.get_album(album_id)
-        return flask.send_file(album.artpath)
+@app.route('/album/query/<query:queries>')
+@resource_query('albums')
+def album_query(queries):
+    return g.lib.albums(queries)
 
 
-    # Artists.
-
-    @app.route('/'+secret+'/artist/')
-    def all_artists():
-        with g.lib.transaction() as tx:
-            rows = tx.query("SELECT DISTINCT albumartist FROM albums")
-        all_artists = [row[0] for row in rows]
-        return flask.jsonify(artist_names=all_artists)
+@app.route('/album/<int:album_id>/art')
+def album_art(album_id):
+    album = g.lib.get_album(album_id)
+    return flask.send_file(album.artpath)
 
 
-    # Library information.
+# Artists.
 
-    @app.route('/'+secret+'/stats')
-    def stats():
-        with g.lib.transaction() as tx:
-            item_rows = tx.query("SELECT COUNT(*) FROM items")
-            album_rows = tx.query("SELECT COUNT(*) FROM albums")
-        return flask.jsonify({
-            'items': item_rows[0][0],
-            'albums': album_rows[0][0],
-        })
+@app.route('/artist/')
+def all_artists():
+    with g.lib.transaction() as tx:
+        rows = tx.query("SELECT DISTINCT albumartist FROM albums")
+    all_artists = [row[0] for row in rows]
+    return flask.jsonify(artist_names=all_artists)
 
 
-    # Smart playlists
+# Library information.
 
-    smart_playlists = {
-        "Metal": (3, 4),
-        "NoMetal": (1, 2)
-    }
-
-    @app.route('/'+secret+'/playlists')
-    def playlists():
-        return flask.jsonify({
-            'playlists': smart_playlists.keys()
-        })
-
-
-    @app.route('/'+secret+'/playlists/<queries>')
-    @resource_query('playlist_items')
-    def playlist_by_name(queries):
-        from beetsplug import vitaly_smart_playlists
-        min, max = smart_playlists[queries]
-        tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 30, True)
-
-        return tracks
+@app.route('/stats')
+def stats():
+    with g.lib.transaction() as tx:
+        item_rows = tx.query("SELECT COUNT(*) FROM items")
+        album_rows = tx.query("SELECT COUNT(*) FROM albums")
+    return flask.jsonify({
+        'items': item_rows[0][0],
+        'albums': album_rows[0][0],
+    })
 
 
-    @app.route('/'+secret+'/item/<id>/rating', methods=["PUT"])
-    def update_rating(id):
-        track = g.lib.get_item(id)
-        track.itunes_rating = request.get_json()["newRating"]
-        with g.lib.transaction():
-            track.try_sync(True, False)
+# Smart playlists
 
-        return "", 200
+smart_playlists = {
+    "Metal": (3, 4),
+    "NoMetal": (1, 2)
+}
 
-
-    @app.route('/'+secret+'/item/<id>/last-played', methods=["POST"])
-    def update_last_played(id):
-        track = g.lib.get_item(id)
-        track.itunes_playcount += 1
-        track.itunes_lastplayed = time.mktime(datetime.utcnow().timetuple())
-        with g.lib.transaction():
-            track.try_sync(True, False)
-
-        return "", 200
+@app.route('/playlists')
+def playlists():
+    return flask.jsonify({
+        'playlists': smart_playlists.keys()
+    })
 
 
-    # UI.
+@app.route('/playlists/<queries>')
+@resource_query('playlist_items')
+def playlist_by_name(queries):
+    from beetsplug import vitaly_smart_playlists
+    min, max = smart_playlists[queries]
+    tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 30, True)
 
-    @app.route('/'+secret+'/')
-    def home():
-        return flask.render_template('index.html')
+    return tracks
+
+
+@app.route('/item/<id>/rating', methods=["PUT"])
+def update_rating(id):
+    track = g.lib.get_item(id)
+    track.itunes_rating = request.get_json()["newRating"]
+    with g.lib.transaction():
+        track.try_sync(True, False)
+
+    return "", 200
+
+
+@app.route('/item/<id>/last-played', methods=["POST"])
+def update_last_played(id):
+    track = g.lib.get_item(id)
+    track.itunes_playcount += 1
+    track.itunes_lastplayed = time.mktime(datetime.utcnow().timetuple())
+    with g.lib.transaction():
+        track.try_sync(True, False)
+
+    return "", 200
+
+
+# UI.
+
+@app.route('/')
+def home():
+    return flask.render_template('index.html')
 
 
 # Plugin hook.
@@ -307,7 +307,7 @@ class WebPlugin(BeetsPlugin):
         super(WebPlugin, self).__init__()
         self.config.add({
             'host': u'0.0.0.0',
-            'port': 80,
+            'port': 5000,
             'cors': '',
         })
 
@@ -315,13 +315,9 @@ class WebPlugin(BeetsPlugin):
         cmd = ui.Subcommand('web', help=u'start a Web interface')
         cmd.parser.add_option(u'-d', u'--debug', action='store_true',
                               default=False, help=u'debug mode')
-        cmd.parser.add_option(u'-s', u'--secret', dest='secret', help="secret prefix to urls")
 
         def func(lib, opts, args):
             args = ui.decargs(args)
-
-            if not opts.secret:
-                raise Exception("secret is required")
 
             if args:
                 self.config['host'] = args.pop(0)
@@ -340,7 +336,6 @@ class WebPlugin(BeetsPlugin):
                 }
                 CORS(app)
             # Start the web application.
-            create_routes(opts.secret)
             app.run(host=self.config['host'].get(unicode),
                     port=self.config['port'].get(int),
                     debug=opts.debug, threaded=True)
