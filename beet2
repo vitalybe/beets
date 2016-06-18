@@ -16,6 +16,15 @@
 # included in all copies or substantial portions of the Software.
 
 import beets.ui
+import sys
 
 if __name__ == '__main__':
     beets.ui.main()
+    try:
+        sys.stdout.close()
+    except:
+	pass
+    try:
+        sys.stderr.close()
+    except:
+        pass

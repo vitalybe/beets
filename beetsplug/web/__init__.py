@@ -285,6 +285,9 @@ def update_rating(id):
 @app.route('/item/<id>/last-played', methods=["POST"])
 def update_last_played(id):
     track = g.lib.get_item(id)
+    if "itunes_playcount" not in track:
+        track.itunes_playcount = 0
+
     track.itunes_playcount += 1
     track.itunes_lastplayed = time.mktime(datetime.utcnow().timetuple())
     with g.lib.transaction():

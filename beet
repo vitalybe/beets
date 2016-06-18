@@ -1,2 +1,2 @@
 #!/bin/bash
-./beet2 -c ~/git/beets/data/config/config.yaml $* 
+/cygdrive/c/Users/htpc2/Google\ Drive/Projects/beets/beet2 -c /cygdrive/c/Users/htpc2/Google\ Drive/Projects/beets/data/config/config.yaml "$@"
