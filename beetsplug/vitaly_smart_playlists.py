@@ -31,22 +31,17 @@ class VitalySmartPlaylists(BeetsPlugin):
         super(VitalySmartPlaylists, self).__init__()
 
     def commands(self):
-        cmd = ui.Subcommand('smart',
-                            help=u'generate smart vitaly playlists by song aggression')
-        cmd.parser.add_option(u'--max', dest='max_aggression', help="maximum aggression of songs (1-4)")
-        cmd.parser.add_option(u'--min', dest='min_aggression', help="minimum aggression of songs (1-4)")
+        cmd = ui.Subcommand('smart', help=u'generate smart vitaly playlists by song aggression, '
+                                          u'e.g: beets smart -c 10 -s aggression::[12]')
         cmd.parser.add_option(u'-c', u'--count', dest='count', help="generated track count")
         cmd.parser.add_option(u'-s', u'--shuffle', action='store_true', help="shuffle the result")
 
         def func(lib, opts, args):
 
-            max_aggression = int(opts.max_aggression)
-            min_aggression = int(opts.min_aggression)
             count = int(opts.count)
 
             query = decargs(args)
-            items = generate_playlist(lib, int(min_aggression), int(max_aggression), count,
-                                      opts.shuffle, " ".join(query))
+            items = generate_playlist(lib, count, opts.shuffle, " ".join(query))
 
             for item in items:
                 score_string = ", ".join(['%s: %s' % (key.replace("rule_", ""), value) for (key, value) in sorted(item.scores.items())])
@@ -145,18 +140,15 @@ def post_rule_limit_artists(sorted_tracks):
             artists[track.artist] = 0
 
 
-def generate_playlist(lib, min_aggression, max_aggression, count, shuffle, input_query=""):
+def generate_playlist(lib, count, shuffle, input_query=""):
     # TODO: Validate aggression (int, min, max)
     # TODO: accept range of aggression and query by aggression::[234] (ranges don't work since it is stored as string)
 
     RULES = [rule_play_rating, rule_not_played_too_early, rule_play_count, rule_new_song, rule_play_last_time]
 
     log.debug(u"Getting tracks")
-    log.debug(u"Aggression: {0}-{1}".format(min_aggression, max_aggression))
-    aggression_values = "".join([str(i) for i in range(min_aggression, max_aggression+1)])
-    query = u"aggression::[{0}] {1}".format(aggression_values, input_query)
-    log.debug(query)
-    items = lib.items(query)
+    log.debug("Querying: " + input_query)
+    items = lib.items(input_query)
 
     log.debug(u"Running rules")
     run_rules(items, RULES)

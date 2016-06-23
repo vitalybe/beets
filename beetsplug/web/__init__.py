@@ -40,8 +40,8 @@ def _rep(obj, expand=False):
     out = dict(obj)
 
     if isinstance(obj, beets.library.Item):
-        music_folder_name = "\\beets-music\\"
-        headless_start_index = out['path'].find(music_folder_name) + len(music_folder_name)
+        music_folder_name = "beets-music"
+        headless_start_index = out['path'].find(music_folder_name) + len(music_folder_name) + 1
         out['path'] = out['path'][headless_start_index::]
 
         # Get the size (in bytes) of the backing file. This is useful
@@ -251,8 +251,9 @@ def stats():
 # Smart playlists
 
 smart_playlists = {
-    "Metal": (3, 4),
-    "NoMetal": (1, 2)
+    "Metal": u"aggression::[34]",
+    "NoMetal": u"aggression::[12]",
+    "NoMetal-NoNew": u"aggression::[12] itunes_rating:1.."
 }
 
 @app.route('/playlists')
@@ -266,8 +267,8 @@ def playlists():
 @resource_query('playlist_items')
 def playlist_by_name(queries):
     from beetsplug import vitaly_smart_playlists
-    min, max = smart_playlists[queries]
-    tracks = vitaly_smart_playlists.generate_playlist(g.lib, min, max, 30, True)
+    query = smart_playlists[queries]
+    tracks = vitaly_smart_playlists.generate_playlist(g.lib, 30, True, query)
 
     return tracks
 
