@@ -20,38 +20,8 @@ from datetime import datetime
 
 from beets import ui, logging
 from beets.plugins import BeetsPlugin
-from beets.ui import print_, decargs
 
 log = logging.getLogger('beets')
-
-
-class VitalySmartPlaylists(BeetsPlugin):
-
-    def __init__(self):
-        super(VitalySmartPlaylists, self).__init__()
-
-    def commands(self):
-        cmd = ui.Subcommand('smart', help=u'generate smart vitaly playlists by song aggression, '
-                                          u'e.g: beets smart -c 10 -s aggression::[12]')
-        cmd.parser.add_option(u'-c', u'--count', dest='count', help="generated track count")
-        cmd.parser.add_option(u'-s', u'--shuffle', action='store_true', help="shuffle the result")
-
-        def func(lib, opts, args):
-
-            count = int(opts.count)
-
-            query = decargs(args)
-            items = generate_playlist(lib, count, opts.shuffle, " ".join(query))
-
-            for item in items:
-                score_string = ", ".join(['%s: %s' % (key.replace("rule_", ""), value) for (key, value) in sorted(item.scores.items())])
-                score_sum = round(sum(item.scores.values()), 2)
-                item_string = unicode(item).ljust(60)
-                print_(u"Track: {0} Scores: {1}=[{2}]".format(item_string, score_sum, score_string))
-
-
-        cmd.func = func
-        return [cmd]
 
 
 def run_rules(tracks, rules):
@@ -141,9 +111,6 @@ def post_rule_limit_artists(sorted_tracks):
 
 
 def generate_playlist(lib, count, shuffle, input_query=""):
-    # TODO: Validate aggression (int, min, max)
-    # TODO: accept range of aggression and query by aggression::[234] (ranges don't work since it is stored as string)
-
     RULES = [rule_play_rating, rule_not_played_too_early, rule_play_count, rule_new_song, rule_play_last_time]
 
     log.debug(u"Getting tracks")
