@@ -1,1 +1,0 @@
-c:\Python27_Backup\python.exe ./beet2 -c ./data/config/config.yaml %*
