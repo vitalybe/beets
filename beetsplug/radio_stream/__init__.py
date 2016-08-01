@@ -43,7 +43,7 @@ def _rep(obj, expand=False):
     out = dict(obj)
 
     if isinstance(obj, beets.library.Item):
-        music_folder_name = "beets-music"
+        music_folder_name = "radio-stream/music"
         headless_start_index = out['path'].find(music_folder_name) + len(music_folder_name) + 1
         out['path'] = out['path'][headless_start_index::]
 
