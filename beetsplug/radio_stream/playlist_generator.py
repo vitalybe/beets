@@ -35,16 +35,16 @@ def run_rules(tracks, rules):
 
 def rule_play_rating(track, power=10):
     MAX_RATING = 100
-    if "itunes_rating" in track:
-        return float(track.itunes_rating) / MAX_RATING * power
+    if "rating" in track:
+        return float(track.rating) / MAX_RATING * power
     else:
         return 0
 
 
 def rule_play_last_time(track, power=15):
     MAX_PLAYED_LAST_DAYS = 300
-    if "itunes_lastplayed" in track:
-        last_played = datetime.fromtimestamp(track.itunes_lastplayed)
+    if "lastplayed" in track:
+        last_played = datetime.fromtimestamp(track.lastplayed)
         days_passed = (datetime.now()-last_played).days
     else:
         days_passed = sys.maxint
@@ -55,8 +55,8 @@ def rule_play_last_time(track, power=15):
 
 
 def rule_not_played_too_early(track, power=-1000):
-    if "itunes_lastplayed" in track:
-        last_played = datetime.fromtimestamp(track.itunes_lastplayed)
+    if "lastplayed" in track:
+        last_played = datetime.fromtimestamp(track.lastplayed)
         days_passed = (datetime.now()-last_played).days
     else:
         days_passed = sys.maxint
@@ -72,7 +72,7 @@ def rule_not_played_too_early(track, power=-1000):
         0: 3
     }
 
-    rating = track.get("itunes_rating", 0)
+    rating = track.get("rating", 0)
     min_days = min_days_for_rating.get(rating, None)
     if not min_days:
         raise KeyError("Invalid rating: %s" % track)
@@ -85,12 +85,12 @@ def rule_not_played_too_early(track, power=-1000):
 
 def rule_play_count(track, power=-10):
     MAX_COUNT = 30
-    playcount = track.get("itunes_playcount", 0)
+    playcount = track.get("playcount", 0)
     return float(playcount) / MAX_COUNT * power
 
 
 def rule_new_song(track, power=30):
-    if track.get("itunes_rating", 0) == 0:
+    if track.get("rating", 0) == 0:
         return power
     else:
         return 0

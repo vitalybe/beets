@@ -31,6 +31,8 @@ import json
 import logging
 from beetsplug.radio_stream import playlist_generator
 from beets.ui import print_, decargs
+from beets.dbcore import types
+from beets.library import DateType
 
 
 # Utilities.
@@ -175,7 +177,7 @@ def before_request():
 smart_playlists = {
     "Metal": u"aggression::[34]",
     "NoMetal": u"aggression::[12]",
-    "NoMetal-NoNew": u"aggression::[12] itunes_rating:1.."
+    "NoMetal-NoNew": u"aggression::[12] rating:1.."
 }
 
 @app.route('/playlists')
@@ -197,7 +199,7 @@ def playlist_by_name(queries):
 @app.route('/item/<id>/rating', methods=["PUT"])
 def update_rating(id):
     track = g.lib.get_item(id)
-    track.itunes_rating = request.get_json()["newRating"]
+    track.rating = request.get_json()["newRating"]
     with g.lib.transaction():
         track.try_sync(True, False)
 
@@ -207,11 +209,11 @@ def update_rating(id):
 @app.route('/item/<id>/last-played', methods=["POST"])
 def update_last_played(id):
     track = g.lib.get_item(id)
-    if "itunes_playcount" not in track:
-        track.itunes_playcount = 0
+    if "playcount" not in track:
+        track.playcount = 0
 
-    track.itunes_playcount += 1
-    track.itunes_lastplayed = time.mktime(datetime.utcnow().timetuple())
+    track.playcount += 1
+    track.lastplayed = time.mktime(datetime.utcnow().timetuple())
     with g.lib.transaction():
         track.try_sync(True, False)
 
@@ -220,6 +222,15 @@ def update_last_played(id):
 
 # Plugin hook.
 class RadioStreamPlugin(BeetsPlugin):
+
+    item_types = {
+        'rating':      types.INTEGER,  # 0..100 scale
+        'playcount':   types.INTEGER,
+        'skipcount':   types.INTEGER,
+        'lastplayed':  DateType(),
+        'lastskipped': DateType(),
+    }
+
     def __init__(self):
         super(RadioStreamPlugin, self).__init__()
 
