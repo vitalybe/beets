@@ -22,6 +22,7 @@ import time
 from beets.plugins import BeetsPlugin
 from beets import ui
 from beets import util
+from beets import config
 import beets.library
 import flask
 from flask import g, request
@@ -173,24 +174,22 @@ def before_request():
     g.lib = app.config['lib']
 
 # Smart playlists
+_radio_stream_config = config['radio-stream']
+_playlists_config = _radio_stream_config["playlists"]
 
-smart_playlists = {
-    "Metal": u"aggression::[34]",
-    "NoMetal": u"aggression::[12]",
-    "NoMetal-NoNew": u"aggression::[12] rating:1.."
-}
+_playlists = {str(playlist["name"]): str(playlist["query"]) for playlist in _playlists_config}
 
 @app.route('/playlists')
 def playlists():
     return flask.jsonify({
-        'playlists': smart_playlists.keys()
+        'playlists': _playlists.keys()
     })
 
 
 @app.route('/playlists/<queries>')
 @resource_query('playlist_items')
 def playlist_by_name(queries):
-    query = smart_playlists[queries]
+    query = _playlists[queries]
     tracks = playlist_generator.generate_playlist(g.lib, 30, True, query)
 
     return tracks
@@ -238,10 +237,18 @@ class RadioStreamPlugin(BeetsPlugin):
         name_column_length = 60
         count = 10
 
-        if opts:
+        if opts.count:
             count = int(opts.count)
 
-        query = decargs(args)
+        if opts.playlist:
+            if opts.playlist not in _playlists:
+                self._log.error(u'Playlist not defined: {}'.format(opts.playlist))
+                return
+
+            query = _playlists[opts.playlist]
+        else:
+            query = decargs(args)
+
         items = playlist_generator.generate_playlist(lib, count, opts.shuffle, u" ".join(query))
 
         for item in items:
@@ -292,6 +299,7 @@ class RadioStreamPlugin(BeetsPlugin):
                                          help=u'preview generated playlists, e.g: radio-preview -c 10 genre:metal')
         preview_command.parser.add_option(u'-c', u'--count', dest='count', default=30, help="generated track count")
         preview_command.parser.add_option(u'-s', u'--shuffle', action='store_true', help="shuffle the result")
+        preview_command.parser.add_option(u'-p', u'--playlist', dest='playlist', help="preview specified playlist")
         preview_command.func = self.preview_playlist_command
 
         return [server_command, preview_command]
