@@ -177,7 +177,7 @@ def before_request():
 _radio_stream_config = config['radio-stream']
 _playlists_config = _radio_stream_config["playlists"]
 
-_playlists = {str(playlist["name"]): str(playlist["query"]) for playlist in _playlists_config}
+_playlists = {str(playlist["name"]): unicode(playlist["query"]) for playlist in _playlists_config}
 
 @app.route('/playlists')
 def playlists():
@@ -244,8 +244,7 @@ class RadioStreamPlugin(BeetsPlugin):
             if opts.playlist not in _playlists:
                 self._log.error(u'Playlist not defined: {}'.format(opts.playlist))
                 return
-
-            query = _playlists[opts.playlist]
+            query = _playlists[opts.playlist].split(u" ")
         else:
             query = decargs(args)
 
