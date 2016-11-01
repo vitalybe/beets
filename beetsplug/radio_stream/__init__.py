@@ -34,7 +34,8 @@ from beetsplug.radio_stream import playlist_generator
 from beets.ui import print_, decargs
 from beets.dbcore import types
 from beets.library import DateType
-
+import time
+import pylast
 
 # Utilities.
 
@@ -179,6 +180,23 @@ _playlists_config = _radio_stream_config["playlists"]
 
 _playlists = {str(playlist["name"]): unicode(playlist["query"]) for playlist in _playlists_config}
 
+# Last.fm integration
+LAST_FM_API_KEY = "9e46560f972eb8300c78c0fc837d1c13"  # this is a sample key
+LAST_FM_API_SECRET = "c07041797ec53a8220807663ae416ac9"
+
+lastFmConfig = _radio_stream_config["last-fm"]
+lastFmUsername = lastFmConfig["username"]
+lastFmPassword = lastFmConfig["password"]
+if lastFmUsername and lastFmPassword:
+    try:
+        _lastFmNetwork = pylast.LastFMNetwork(api_key=LAST_FM_API_KEY, api_secret=LAST_FM_API_SECRET,
+                                              username=str(lastFmUsername), password_hash=pylast.md5(str(lastFmPassword)))
+    except Exception as e:
+        print("ERROR: Failed to initialize LastFm service: " + str(e))
+else:
+    _lastFmNetwork = None
+    print("NOTE: LastFm not configured")
+
 @app.route('/playlists')
 def playlists():
     return flask.jsonify({
@@ -215,6 +233,12 @@ def update_last_played(id):
     track.lastplayed = time.mktime(datetime.utcnow().timetuple())
     with g.lib.transaction():
         track.try_sync(True, False)
+
+    if _lastFmNetwork:
+        try:
+            _lastFmNetwork.scrobble(artist=track.artist, title=track.title, timestamp=int(time.time()))
+        except Exception as e:
+            print("Failed to scrobble: " + str(e))
 
     return "", 200
 
