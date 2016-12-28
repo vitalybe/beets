@@ -284,6 +284,10 @@ class RadioStreamPlugin(BeetsPlugin):
             print_(u"Track: {0} Scores: {1}=[{2}]".format(item_string, score_sum, score_string))
 
     def start_server_command(self, lib, opts, args):
+        # disable werkzeug's message of "* Running on ... (Ctrl-C to quit)"
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.WARN)
+
         args = ui.decargs(args)
 
         self.config.add({
