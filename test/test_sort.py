@@ -17,8 +17,8 @@
 """
 from __future__ import division, absolute_import, print_function
 
+import unittest
 from test import _common
-from test._common import unittest
 import beets.library
 from beets import dbcore
 from beets import config
@@ -153,10 +153,10 @@ class SortFixedFieldTest(DummyDataTestCase):
         q = u''
         sort = dbcore.query.FixedFieldSort('path', True)
         results = self.lib.items(q, sort)
-        self.assertEqual(results[0]['path'], '/path0.mp3')
-        self.assertEqual(results[1]['path'], '/patH1.mp3')
-        self.assertEqual(results[2]['path'], '/paTH2.mp3')
-        self.assertEqual(results[3]['path'], '/PATH3.mp3')
+        self.assertEqual(results[0]['path'], b'/path0.mp3')
+        self.assertEqual(results[1]['path'], b'/patH1.mp3')
+        self.assertEqual(results[2]['path'], b'/paTH2.mp3')
+        self.assertEqual(results[3]['path'], b'/PATH3.mp3')
 
 
 class SortFlexFieldTest(DummyDataTestCase):
@@ -536,5 +536,5 @@ def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

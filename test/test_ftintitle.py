@@ -17,7 +17,7 @@
 
 from __future__ import division, absolute_import, print_function
 
-from test._common import unittest
+import unittest
 from test.helper import TestHelper
 from beetsplug import ftintitle
 
@@ -181,5 +181,5 @@ class FtInTitlePluginTest(unittest.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

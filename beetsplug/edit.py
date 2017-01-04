@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # This file is part of beets.
 # Copyright 2016
 #
@@ -23,10 +24,12 @@ from beets.dbcore import types
 from beets.importer import action
 from beets.ui.commands import _do_query, PromptChoice
 from copy import deepcopy
+import codecs
 import subprocess
 import yaml
 from tempfile import NamedTemporaryFile
 import os
+import six
 
 
 # These "safe" types can avoid the format/parse cycle that most fields go
@@ -82,7 +85,7 @@ def load(s):
 
             # Convert all keys to strings. They started out as strings,
             # but the user may have inadvertently messed this up.
-            out.append({unicode(k): v for k, v in d.items()})
+            out.append({six.text_type(k): v for k, v in d.items()})
 
     except yaml.YAMLError as e:
         raise ParseError(u'invalid YAML: {}'.format(e))
@@ -141,7 +144,7 @@ def apply_(obj, data):
         else:
             # Either the field was stringified originally or the user changed
             # it from a safe type to an unsafe one. Parse it as a string.
-            obj.set_parse(key, unicode(value))
+            obj.set_parse(key, six.text_type(value))
 
 
 class EditPlugin(plugins.BeetsPlugin):
@@ -242,9 +245,15 @@ class EditPlugin(plugins.BeetsPlugin):
         old_data = [flatten(o, fields) for o in objs]
 
         # Set up a temporary file with the initial data for editing.
-        new = NamedTemporaryFile(suffix='.yaml', delete=False)
+        if six.PY2:
+            new = NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+        else:
+            new = NamedTemporaryFile(mode='w', suffix='.yaml', delete=False,
+                                     encoding='utf-8')
         old_str = dump(old_data)
         new.write(old_str)
+        if six.PY2:
+            old_str = old_str.decode('utf-8')
         new.close()
 
         # Loop until we have parseable data and the user confirms.
@@ -255,7 +264,7 @@ class EditPlugin(plugins.BeetsPlugin):
 
                 # Read the data back after editing and check whether anything
                 # changed.
-                with open(new.name) as f:
+                with codecs.open(new.name, encoding='utf-8') as f:
                     new_str = f.read()
                 if new_str == old_str:
                     ui.print_(u"No changes; aborting.")
@@ -310,8 +319,8 @@ class EditPlugin(plugins.BeetsPlugin):
         are temporary.
         """
         if len(old_data) != len(new_data):
-            self._log.warn(u'number of objects changed from {} to {}',
-                           len(old_data), len(new_data))
+            self._log.warning(u'number of objects changed from {} to {}',
+                              len(old_data), len(new_data))
 
         obj_by_id = {o.id: o for o in objs}
         ignore_fields = self.config['ignore_fields'].as_str_seq()
@@ -321,7 +330,7 @@ class EditPlugin(plugins.BeetsPlugin):
             forbidden = False
             for key in ignore_fields:
                 if old_dict.get(key) != new_dict.get(key):
-                    self._log.warn(u'ignoring object whose {} changed', key)
+                    self._log.warning(u'ignoring object whose {} changed', key)
                     forbidden = True
                     break
             if forbidden:

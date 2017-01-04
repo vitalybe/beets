@@ -18,9 +18,10 @@
 from __future__ import division, absolute_import, print_function
 
 from test import _common
-from test._common import unittest
 from beets.autotag import mb
 from beets import config
+
+import unittest
 import mock
 
 
@@ -66,7 +67,7 @@ class MBAlbumInfoTest(_common.TestCase):
             for i, recording in enumerate(tracks):
                 track = {
                     'recording': recording,
-                    'position': bytes(i + 1),
+                    'position': i + 1,
                 }
                 if track_length:
                     # Track lengths are distinct from recording lengths.
@@ -491,5 +492,5 @@ class MBLibraryTest(unittest.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

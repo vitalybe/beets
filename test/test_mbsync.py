@@ -15,9 +15,9 @@
 
 from __future__ import division, absolute_import, print_function
 
+import unittest
 from mock import patch
 
-from test._common import unittest
 from test.helper import TestHelper,\
     generate_album_info, \
     generate_track_info, \
@@ -100,8 +100,8 @@ class MbsyncCliTest(unittest.TestCase, TestHelper):
         self.assertEqual(e, logs[0])
 
         # restore the config
-        config['format_item'] = '$artist - $album - $title'
-        config['format_album'] = '$albumartist - $album'
+        config['format_item'] = u'$artist - $album - $title'
+        config['format_album'] = u'$albumartist - $album'
 
         # Test singleton with no mb_trackid.
         # The default singleton format includes $artist and $album
@@ -131,5 +131,5 @@ class MbsyncCliTest(unittest.TestCase, TestHelper):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

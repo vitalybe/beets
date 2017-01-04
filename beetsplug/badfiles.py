@@ -27,6 +27,7 @@ import shlex
 import os
 import errno
 import sys
+import six
 
 
 class BadFiles(BeetsPlugin):
@@ -97,14 +98,14 @@ class BadFiles(BeetsPlugin):
             if not checker:
                 continue
             path = item.path
-            if not isinstance(path, unicode):
+            if not isinstance(path, six.text_type):
                 path = item.path.decode(sys.getfilesystemencoding())
             status, errors, output = checker(path)
             if status > 0:
                 ui.print_(u"{}: checker exited withs status {}"
                           .format(ui.colorize('text_error', dpath), status))
                 for line in output:
-                    ui.print_("  {}".format(displayable_path(line)))
+                    ui.print_(u"  {}".format(displayable_path(line)))
             elif errors > 0:
                 ui.print_(u"{}: checker found {} errors or warnings"
                           .format(ui.colorize('text_warning', dpath), errors))

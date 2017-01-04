@@ -121,7 +121,7 @@ def _all_releases(items):
         for release_id in release_ids:
             relcounts[release_id] += 1
 
-    for release_id, count in relcounts.iteritems():
+    for release_id, count in relcounts.items():
         if float(count) / len(items) > COMMON_REL_THRESH:
             yield release_id
 
@@ -181,7 +181,7 @@ class AcoustidPlugin(plugins.BeetsPlugin):
 
         def submit_cmd_func(lib, opts, args):
             try:
-                apikey = config['acoustid']['apikey'].get(unicode)
+                apikey = config['acoustid']['apikey'].as_str()
             except confit.NotFoundError:
                 raise ui.UserError(u'no Acoustid user API key provided')
             submit_items(self._log, apikey, lib.items(ui.decargs(args)))
@@ -236,7 +236,7 @@ def submit_items(log, userkey, items, chunksize=64):
         try:
             acoustid.submit(API_KEY, userkey, data)
         except acoustid.AcoustidError as exc:
-            log.warn(u'acoustid submission error: {0}', exc)
+            log.warning(u'acoustid submission error: {0}', exc)
         del data[:]
 
     for item in items:

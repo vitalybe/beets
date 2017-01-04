@@ -18,15 +18,15 @@ from __future__ import division, absolute_import, print_function
 import subprocess
 import os
 import collections
-import itertools
 import sys
 import warnings
 import re
+from six.moves import zip
 
 from beets import logging
 from beets import ui
 from beets.plugins import BeetsPlugin
-from beets.util import syspath, command_output, displayable_path
+from beets.util import syspath, command_output, displayable_path, py3_path
 
 
 # Utilities.
@@ -60,7 +60,7 @@ def call(args):
     except UnicodeEncodeError:
         # Due to a bug in Python 2's subprocess on Windows, Unicode
         # filenames can fail to encode on that platform. See:
-        # http://code.google.com/p/beets/issues/detail?id=499
+        # https://github.com/google-code-export/beets/issues/499
         raise ReplayGainError(u"argument encoding failed")
 
 
@@ -102,9 +102,9 @@ class Bs1770gainBackend(Backend):
             'method': 'replaygain',
         })
         self.chunk_at = config['chunk_at'].as_number()
-        self.method = b'--' + bytes(config['method'].get(unicode))
+        self.method = '--' + config['method'].as_str()
 
-        cmd = b'bs1770gain'
+        cmd = 'bs1770gain'
         try:
             call([cmd, self.method])
             self.command = cmd
@@ -195,7 +195,7 @@ class Bs1770gainBackend(Backend):
         # Construct shell command.
         cmd = [self.command]
         cmd = cmd + [self.method]
-        cmd = cmd + [b'-it']
+        cmd = cmd + ['-p']
 
         # Workaround for Windows: the underlying tool fails on paths
         # with the \\?\ prefix, so we don't use it here. This
@@ -220,11 +220,11 @@ class Bs1770gainBackend(Backend):
         containing information about each analyzed file.
         """
         out = []
-        data = text.decode('utf8', errors='ignore')
+        data = text.decode('utf-8', errors='ignore')
         regex = re.compile(
-            ur'(\s{2,2}\[\d+\/\d+\].*?|\[ALBUM\].*?)'
-            '(?=\s{2,2}\[\d+\/\d+\]|\s{2,2}\[ALBUM\]'
-            ':|done\.\s)', re.DOTALL | re.UNICODE)
+            u'(\\s{2,2}\\[\\d+\\/\\d+\\].*?|\\[ALBUM\\].*?)'
+            '(?=\\s{2,2}\\[\\d+\\/\\d+\\]|\\s{2,2}\\[ALBUM\\]'
+            ':|done\\.\\s)', re.DOTALL | re.UNICODE)
         results = re.findall(regex, data)
         for parts in results[0:num_lines]:
             part = parts.split(b'\n')
@@ -256,7 +256,7 @@ class CommandBackend(Backend):
             'noclip': True,
         })
 
-        self.command = config["command"].get(unicode)
+        self.command = config["command"].as_str()
 
         if self.command:
             # Explicit executable path.
@@ -267,9 +267,9 @@ class CommandBackend(Backend):
                 )
         else:
             # Check whether the program is in $PATH.
-            for cmd in (b'mp3gain', b'aacgain'):
+            for cmd in ('mp3gain', 'aacgain'):
                 try:
-                    call([cmd, b'-v'])
+                    call([cmd, '-v'])
                     self.command = cmd
                 except OSError:
                     pass
@@ -286,7 +286,7 @@ class CommandBackend(Backend):
         """Computes the track gain of the given tracks, returns a list
         of TrackGain objects.
         """
-        supported_items = filter(self.format_supported, items)
+        supported_items = list(filter(self.format_supported, items))
         output = self.compute_gain(supported_items, False)
         return output
 
@@ -297,7 +297,7 @@ class CommandBackend(Backend):
         # TODO: What should be done when not all tracks in the album are
         # supported?
 
-        supported_items = filter(self.format_supported, album.items())
+        supported_items = list(filter(self.format_supported, album.items()))
         if len(supported_items) != len(album.items()):
             self._log.debug(u'tracks are of unsupported format')
             return AlbumGain(None, [])
@@ -334,14 +334,14 @@ class CommandBackend(Backend):
         # tag-writing; this turns the mp3gain/aacgain tool into a gain
         # calculator rather than a tag manipulator because we take care
         # of changing tags ourselves.
-        cmd = [self.command, b'-o', b'-s', b's']
+        cmd = [self.command, '-o', '-s', 's']
         if self.noclip:
             # Adjust to avoid clipping.
-            cmd = cmd + [b'-k']
+            cmd = cmd + ['-k']
         else:
             # Disable clipping warning.
-            cmd = cmd + [b'-c']
-        cmd = cmd + [b'-d', bytes(self.gain_offset)]
+            cmd = cmd + ['-c']
+        cmd = cmd + ['-d', str(self.gain_offset)]
         cmd = cmd + [syspath(i.path) for i in items]
 
         self._log.debug(u'analyzing {0} files', len(items))
@@ -574,7 +574,7 @@ class GStreamerBackend(Backend):
 
         self._file = self._files.pop(0)
         self._pipe.set_state(self.Gst.State.NULL)
-        self._src.set_property("location", syspath(self._file.path))
+        self._src.set_property("location", py3_path(syspath(self._file.path)))
         self._pipe.set_state(self.Gst.State.PLAYING)
         return True
 
@@ -595,7 +595,7 @@ class GStreamerBackend(Backend):
         # Set a new file on the filesrc element, can only be done in the
         # READY state
         self._src.set_state(self.Gst.State.READY)
-        self._src.set_property("location", syspath(self._file.path))
+        self._src.set_property("location", py3_path(syspath(self._file.path)))
 
         # Ensure the filesrc element received the paused state of the
         # pipeline in a blocking manner
@@ -809,7 +809,7 @@ class ReplayGainPlugin(BeetsPlugin):
         })
 
         self.overwrite = self.config['overwrite'].get(bool)
-        backend_name = self.config['backend'].get(unicode)
+        backend_name = self.config['backend'].as_str()
         if backend_name not in self.backends:
             raise ui.UserError(
                 u"Selected ReplayGain backend {0} is not supported. "
@@ -883,8 +883,7 @@ class ReplayGainPlugin(BeetsPlugin):
                 )
 
             self.store_album_gain(album, album_gain.album_gain)
-            for item, track_gain in itertools.izip(album.items(),
-                                                   album_gain.track_gains):
+            for item, track_gain in zip(album.items(), album_gain.track_gains):
                 self.store_track_gain(item, track_gain)
                 if write:
                     item.try_write()

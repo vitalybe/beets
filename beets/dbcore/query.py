@@ -22,6 +22,11 @@ from operator import mul
 from beets import util
 from datetime import datetime, timedelta
 import unicodedata
+from functools import reduce
+import six
+
+if not six.PY2:
+    buffer = memoryview  # sqlite won't accept memoryview in python 2
 
 
 class ParsingError(ValueError):
@@ -146,9 +151,9 @@ class NoneQuery(FieldQuery):
         return self.field + " IS NULL", ()
 
     @classmethod
-    def match(self, item):
+    def match(cls, item):
         try:
-            return item[self.field] is None
+            return item[cls.field] is None
         except KeyError:
             return True
 
@@ -228,7 +233,7 @@ class BooleanQuery(MatchQuery):
     """
     def __init__(self, field, pattern, fast=True):
         super(BooleanQuery, self).__init__(field, pattern, fast)
-        if isinstance(pattern, basestring):
+        if isinstance(pattern, six.string_types):
             self.pattern = util.str2bool(pattern)
         self.pattern = int(self.pattern)
 
@@ -242,14 +247,12 @@ class BytesQuery(MatchQuery):
     def __init__(self, field, pattern):
         super(BytesQuery, self).__init__(field, pattern)
 
-        # Use a buffer representation of the pattern for SQLite
+        # Use a buffer/memoryview representation of the pattern for SQLite
         # matching. This instructs SQLite to treat the blob as binary
         # rather than encoded Unicode.
-        if isinstance(self.pattern, basestring):
-            # Implicitly coerce Unicode strings to their bytes
-            # equivalents.
-            if isinstance(self.pattern, unicode):
-                self.pattern = self.pattern.encode('utf8')
+        if isinstance(self.pattern, (six.text_type, bytes)):
+            if isinstance(self.pattern, six.text_type):
+                self.pattern = self.pattern.encode('utf-8')
             self.buf_pattern = buffer(self.pattern)
         elif isinstance(self.pattern, buffer):
             self.buf_pattern = self.pattern
@@ -303,7 +306,7 @@ class NumericQuery(FieldQuery):
         if self.field not in item:
             return False
         value = item[self.field]
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             value = self._convert(value)
 
         if self.point is not None:
@@ -500,9 +503,13 @@ def _to_epoch_time(date):
     """Convert a `datetime` object to an integer number of seconds since
     the (local) Unix epoch.
     """
-    epoch = datetime.fromtimestamp(0)
-    delta = date - epoch
-    return int(delta.total_seconds())
+    if hasattr(date, 'timestamp'):
+        # The `timestamp` method exists on Python 3.3+.
+        return int(date.timestamp())
+    else:
+        epoch = datetime.fromtimestamp(0)
+        delta = date - epoch
+        return int(delta.total_seconds())
 
 
 def _parse_periods(pattern):
@@ -625,12 +632,11 @@ class DateQuery(FieldQuery):
         self.interval = DateInterval.from_periods(start, end)
 
     def match(self, item):
-        if self.field in item:
-            timestamp = float(item[self.field])
-            date = datetime.utcfromtimestamp(timestamp)
-            return self.interval.contains(date)
-        else:
+        if self.field not in item:
             return False
+        timestamp = float(item[self.field])
+        date = datetime.utcfromtimestamp(timestamp)
+        return self.interval.contains(date)
 
     _clause_tmpl = "{0} {1} ?"
 
@@ -797,7 +803,7 @@ class FieldSort(Sort):
 
         def key(item):
             field_val = item.get(self.field, '')
-            if self.case_insensitive and isinstance(field_val, unicode):
+            if self.case_insensitive and isinstance(field_val, six.text_type):
                 field_val = field_val.lower()
             return field_val
 
@@ -844,7 +850,7 @@ class SlowFieldSort(FieldSort):
 
 class NullSort(Sort):
     """No sorting. Leave results unsorted."""
-    def sort(items):
+    def sort(self, items):
         return items
 
     def __nonzero__(self):
@@ -858,4 +864,3 @@ class NullSort(Sort):
 
     def __hash__(self):
         return 0
-

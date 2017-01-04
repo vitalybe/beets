@@ -20,12 +20,14 @@ test_importer module. But here the test importer inherits from
 """
 
 from __future__ import division, absolute_import, print_function
+import unittest
 
-from test._common import unittest, DummyIO
+from test._common import DummyIO
 from test import test_importer
 from beets.ui.commands import TerminalImportSession
 from beets import importer
 from beets import config
+import six
 
 
 class TestTerminalImportSession(TerminalImportSession):
@@ -69,7 +71,7 @@ class TestTerminalImportSession(TerminalImportSession):
             self.io.addinput(u'S')
         elif isinstance(choice, int):
             self.io.addinput(u'M')
-            self.io.addinput(unicode(choice))
+            self.io.addinput(six.text_type(choice))
             self._add_choice_input()
         else:
             raise Exception(u'Unknown choice %s' % choice)
@@ -148,5 +150,5 @@ class GlobalGroupAlbumsImportTest(TerminalImportSessionSetup,
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

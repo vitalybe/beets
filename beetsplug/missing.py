@@ -22,6 +22,7 @@ from beets.library import Item
 from beets.plugins import BeetsPlugin
 from beets.ui import decargs, print_, Subcommand
 from beets import config
+from beets.dbcore import types
 
 
 def _missing_count(album):
@@ -81,6 +82,11 @@ def _item(track_info, album_info, album_id):
 class MissingPlugin(BeetsPlugin):
     """List missing tracks
     """
+
+    album_types = {
+        'missing':  types.INTEGER,
+    }
+
     def __init__(self):
         super(MissingPlugin, self).__init__()
 
@@ -133,7 +139,7 @@ class MissingPlugin(BeetsPlugin):
     def _missing(self, album):
         """Query MusicBrainz to determine items missing from `album`.
         """
-        item_mbids = map(lambda x: x.mb_trackid, album.items())
+        item_mbids = [x.mb_trackid for x in album.items()]
         if len([i for i in album.items()]) < album.albumtotal:
             # fetch missing items
             # TODO: Implement caching that without breaking other stuff

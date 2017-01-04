@@ -72,7 +72,7 @@ The Web backend is built using a simple REST+JSON API with the excellent
 `Backbone.js`_. This allows future non-Web clients to use the same backend API.
 
 .. _Flask: http://flask.pocoo.org/
-.. _Backbone.js: http://documentcloud.github.com/backbone/
+.. _Backbone.js: http://backbonejs.org
 
 Eventually, to make the Web player really viable, we should use a Flash fallback
 for unsupported formats/browsers. There are a number of options for this:
@@ -197,6 +197,7 @@ The interface and response format is similar to the item API, except replacing
 the encapsulation key ``"items"`` with ``"albums"`` when requesting ``/album/``
 or ``/album/5,7``. In addition we can request the cover art of an album with
 ``GET /album/5/art``.
+You can also add the '?expand' flag to get the individual items of an album.
 
 
 ``GET /stats``

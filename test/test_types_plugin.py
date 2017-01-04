@@ -17,8 +17,8 @@ from __future__ import division, absolute_import, print_function
 
 import time
 from datetime import datetime
+import unittest
 
-from test._common import unittest
 from test.helper import TestHelper
 
 from beets.util.confit import ConfigValueError
@@ -48,7 +48,7 @@ class TypesPluginTest(unittest.TestCase, TestHelper):
 
         # Match in range
         out = self.list(u'myint:1..3')
-        self.assertIn(b'aaa', out)
+        self.assertIn('aaa', out)
 
     def test_album_integer_modify_and_query(self):
         self.config['types'] = {'myint': u'int'}
@@ -64,11 +64,15 @@ class TypesPluginTest(unittest.TestCase, TestHelper):
 
         # Match in range
         out = self.list_album(u'myint:1..3')
-        self.assertIn(b'aaa', out)
+        self.assertIn('aaa', out)
 
     def test_float_modify_and_query(self):
         self.config['types'] = {'myfloat': u'float'}
         item = self.add_item(artist=u'aaa')
+
+        # Do not match unset values
+        out = self.list(u'myfloat:10..0')
+        self.assertEqual(u'', out)
 
         self.modify(u'myfloat=-9.1')
         item.load()
@@ -76,13 +80,17 @@ class TypesPluginTest(unittest.TestCase, TestHelper):
 
         # Match in range
         out = self.list(u'myfloat:-10..0')
-        self.assertIn(b'aaa', out)
+        self.assertIn('aaa', out)
 
     def test_bool_modify_and_query(self):
         self.config['types'] = {'mybool': u'bool'}
         true = self.add_item(artist=u'true')
         false = self.add_item(artist=u'false')
         self.add_item(artist=u'unset')
+
+        # Do not match unset values
+        out = self.list(u'mybool:true, mybool:false')
+        self.assertEqual(u'', out)
 
         # Set true
         self.modify(u'mybool=1', u'artist:true')
@@ -112,9 +120,13 @@ class TypesPluginTest(unittest.TestCase, TestHelper):
         old = self.add_item(artist=u'prince')
         new = self.add_item(artist=u'britney')
 
+        # Do not match unset values
+        out = self.list(u'mydate:..2000')
+        self.assertEqual(u'', out)
+
         self.modify(u'mydate=1999-01-01', u'artist:prince')
         old.load()
-        self.assertEqual(old['mydate'], mktime(1999, 01, 01))
+        self.assertEqual(old['mydate'], mktime(1999, 1, 1))
 
         self.modify(u'mydate=1999-12-30', u'artist:britney')
         new.load()
@@ -151,5 +163,5 @@ def mktime(*args):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

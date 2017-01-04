@@ -17,7 +17,7 @@
 """
 from __future__ import division, absolute_import, print_function
 
-from test._common import unittest
+import unittest
 from beetsplug import bpd
 
 
@@ -66,5 +66,5 @@ class CommandParseTest(unittest.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

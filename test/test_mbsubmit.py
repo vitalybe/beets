@@ -15,7 +15,7 @@
 
 from __future__ import division, absolute_import, print_function
 
-from test._common import unittest
+import unittest
 from test.helper import capture_stdout, control_stdin, TestHelper
 from test.test_importer import ImportHelper, AutotagStub
 from test.test_ui_importer import TerminalImportSessionSetup
@@ -68,5 +68,5 @@ class MBSubmitPluginTest(TerminalImportSessionSetup, unittest.TestCase,
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

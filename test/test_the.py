@@ -4,7 +4,7 @@
 
 from __future__ import division, absolute_import, print_function
 
-from test._common import unittest
+import unittest
 from test import _common
 from beets import config
 from beetsplug.the import ThePlugin, PATTERN_A, PATTERN_THE, FORMAT
@@ -64,5 +64,5 @@ class ThePluginTest(_common.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

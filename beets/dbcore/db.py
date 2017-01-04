@@ -27,8 +27,10 @@ import collections
 
 import beets
 from beets.util.functemplate import Template
+from beets.util import py3_path
 from beets.dbcore import types
 from .query import MatchQuery, NullSort, TrueQuery
+import six
 
 
 class FormattedMapping(collections.Mapping):
@@ -66,10 +68,10 @@ class FormattedMapping(collections.Mapping):
     def _get_formatted(self, model, key):
         value = model._type(key).format(model.get(key))
         if isinstance(value, bytes):
-            value = value.decode('utf8', 'ignore')
+            value = value.decode('utf-8', 'ignore')
 
         if self.for_path:
-            sep_repl = beets.config['path_sep_replace'].get(unicode)
+            sep_repl = beets.config['path_sep_replace'].as_str()
             for sep in (os.path.sep, os.path.altsep):
                 if sep:
                     value = value.replace(sep, sep_repl)
@@ -176,9 +178,9 @@ class Model(object):
         ordinary construction are bypassed.
         """
         obj = cls(db)
-        for key, value in fixed_values.iteritems():
+        for key, value in fixed_values.items():
             obj._values_fixed[key] = cls._type(key).from_sql(value)
-        for key, value in flex_values.iteritems():
+        for key, value in flex_values.items():
             obj._values_flex[key] = cls._type(key).from_sql(value)
         return obj
 
@@ -209,13 +211,13 @@ class Model(object):
     # Essential field accessors.
 
     @classmethod
-    def _type(self, key):
+    def _type(cls, key):
         """Get the type of a field, a `Type` instance.
 
         If the field has no explicit type, it is given the base `Type`,
         which does no conversion.
         """
-        return self._fields.get(key) or self._types.get(key) or types.DEFAULT
+        return cls._fields.get(key) or cls._types.get(key) or types.DEFAULT
 
     def __getitem__(self, key):
         """Get the value for a field. Raise a KeyError if the field is
@@ -267,18 +269,18 @@ class Model(object):
         `computed` parameter controls whether computed (plugin-provided)
         fields are included in the key list.
         """
-        base_keys = list(self._fields) + self._values_flex.keys()
+        base_keys = list(self._fields) + list(self._values_flex.keys())
         if computed:
-            return base_keys + self._getters().keys()
+            return base_keys + list(self._getters().keys())
         else:
             return base_keys
 
     @classmethod
-    def all_keys(self):
+    def all_keys(cls):
         """Get a list of available keys for objects of this type.
         Includes fixed and computed fields.
         """
-        return list(self._fields) + self._getters().keys()
+        return list(cls._fields) + list(cls._getters().keys())
 
     # Act like a dictionary.
 
@@ -340,15 +342,19 @@ class Model(object):
 
     # Database interaction (CRUD methods).
 
-    def store(self):
+    def store(self, fields=None):
         """Save the object's metadata into the library database.
+        :param fields: the fields to be stored. If not specified, all fields
+        will be.
         """
+        if fields is None:
+            fields = self._fields
         self._check_db()
 
         # Build assignments for query.
         assignments = []
         subvars = []
-        for key in self._fields:
+        for key in fields:
             if key != 'id' and key in self._dirty:
                 self._dirty.remove(key)
                 assignments.append(key + '=?')
@@ -452,7 +458,7 @@ class Model(object):
         separators will be added to the template.
         """
         # Perform substitution.
-        if isinstance(template, basestring):
+        if isinstance(template, six.string_types):
             template = Template(template)
         return template.substitute(self.formatted(for_path),
                                    self._template_funcs())
@@ -463,7 +469,7 @@ class Model(object):
     def _parse(cls, key, string):
         """Parse a string as a value for the given key.
         """
-        if not isinstance(string, basestring):
+        if not isinstance(string, six.string_types):
             raise TypeError(u"_parse() argument must be a string")
 
         return cls._type(key).parse(string)
@@ -562,13 +568,13 @@ class Results(object):
                 'SELECT * FROM {0} WHERE entity_id=?'.format(
                     self.model_class._flex_table
                 ),
-                (row[b'id'],)
+                (row['id'],)
             )
 
         cols = dict(row)
         values = dict((k, v) for (k, v) in cols.items()
                       if not k[:4] == 'flex')
-        flex_values = dict((row[b'key'], row[b'value']) for row in flex_rows)
+        flex_values = dict((row['key'], row['value']) for row in flex_rows)
 
         # Construct the Python object
         obj = self.model_class._awaken(self.db, values, flex_values)
@@ -595,6 +601,11 @@ class Results(object):
     def __nonzero__(self):
         """Does this result contain any objects?
         """
+        return self.__bool__()
+
+    def __bool__(self):
+        """Does this result contain any objects?
+        """
         return bool(len(self))
 
     def __getitem__(self, n):
@@ -609,8 +620,8 @@ class Results(object):
         it = iter(self)
         try:
             for i in range(n):
-                it.next()
-            return it.next()
+                next(it)
+            return next(it)
         except StopIteration:
             raise IndexError(u'result index {0} out of range'.format(n))
 
@@ -620,7 +631,7 @@ class Results(object):
         """
         it = iter(self)
         try:
-            return it.next()
+            return next(it)
         except StopIteration:
             return None
 
@@ -685,8 +696,9 @@ class Database(object):
     """The Model subclasses representing tables in this database.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, timeout=5.0):
         self.path = path
+        self.timeout = timeout
 
         self._connections = {}
         self._tx_stacks = defaultdict(list)
@@ -721,10 +733,11 @@ class Database(object):
             if thread_id in self._connections:
                 return self._connections[thread_id]
             else:
-                # Make a new connection.
+                # Make a new connection. The `sqlite3` module can't use
+                # bytestring paths here on Python 3, so we need to
+                # provide a `str` using `py3_path`.
                 conn = sqlite3.connect(
-                    self.path,
-                    timeout=beets.config['timeout'].as_number(),
+                    py3_path(self.path), timeout=self.timeout
                 )
 
                 # Access SELECT results like dictionaries.
@@ -732,6 +745,14 @@ class Database(object):
 
                 self._connections[thread_id] = conn
                 return conn
+
+    def _close(self):
+        """Close the all connections to the underlying SQLite database
+        from all threads. This does not render the database object
+        unusable; new connections can still be opened on demand.
+        """
+        with self._shared_map_lock:
+            self._connections.clear()
 
     @contextlib.contextmanager
     def _tx_stack(self):

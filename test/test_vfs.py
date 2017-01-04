@@ -16,8 +16,8 @@
 """Tests for the virtual filesystem builder.."""
 from __future__ import division, absolute_import, print_function
 
+import unittest
 from test import _common
-from test._common import unittest
 from beets import library
 from beets import vfs
 
@@ -45,5 +45,5 @@ class VFSTest(_common.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

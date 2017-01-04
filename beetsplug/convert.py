@@ -22,6 +22,7 @@ import threading
 import subprocess
 import tempfile
 import shlex
+import six
 from string import Template
 
 from beets import ui, util, plugins, config
@@ -39,7 +40,7 @@ ALIASES = {
     u'vorbis': u'ogg',
 }
 
-LOSSLESS_FORMATS = ['ape', 'flac', 'alac', 'wav']
+LOSSLESS_FORMATS = ['ape', 'flac', 'alac', 'wav', 'aiff']
 
 
 def replace_ext(path, ext):
@@ -47,42 +48,43 @@ def replace_ext(path, ext):
 
     The new extension must not contain a leading dot.
     """
-    return os.path.splitext(path)[0] + b'.' + ext
+    ext_dot = b'.' + ext
+    return os.path.splitext(path)[0] + ext_dot
 
 
 def get_format(fmt=None):
-    """Return the command tempate and the extension from the config.
+    """Return the command template and the extension from the config.
     """
     if not fmt:
-        fmt = config['convert']['format'].get(unicode).lower()
+        fmt = config['convert']['format'].as_str().lower()
     fmt = ALIASES.get(fmt, fmt)
 
     try:
         format_info = config['convert']['formats'][fmt].get(dict)
         command = format_info['command']
-        extension = format_info['extension']
+        extension = format_info.get('extension', fmt)
     except KeyError:
         raise ui.UserError(
-            u'convert: format {0} needs "command" and "extension" fields'
+            u'convert: format {0} needs the "command" field'
             .format(fmt)
         )
     except ConfigTypeError:
-        command = config['convert']['formats'][fmt].get(bytes)
+        command = config['convert']['formats'][fmt].get(str)
         extension = fmt
 
     # Convenience and backwards-compatibility shortcuts.
     keys = config['convert'].keys()
     if 'command' in keys:
-        command = config['convert']['command'].get(unicode)
+        command = config['convert']['command'].as_str()
     elif 'opts' in keys:
         # Undocumented option for backwards compatibility with < 1.3.1.
         command = u'ffmpeg -i $source -y {0} $dest'.format(
-            config['convert']['opts'].get(unicode)
+            config['convert']['opts'].as_str()
         )
     if 'extension' in keys:
-        extension = config['convert']['extension'].get(unicode)
+        extension = config['convert']['extension'].as_str()
 
-    return (command.encode('utf8'), extension.encode('utf8'))
+    return (command.encode('utf-8'), extension.encode('utf-8'))
 
 
 def should_transcode(item, fmt):
@@ -120,7 +122,7 @@ class ConvertPlugin(BeetsPlugin):
                 u'opus':
                     u'ffmpeg -i $source -y -vn -acodec libopus -ab 96k $dest',
                 u'ogg':
-                    u'ffmpeg -i $source -y -vn -acodec libvorbis -aq 2 $dest',
+                    u'ffmpeg -i $source -y -vn -acodec libvorbis -aq 3 $dest',
                 u'wma':
                     u'ffmpeg -i $source -y -vn -acodec wmav2 -vn $dest',
             },
@@ -182,33 +184,44 @@ class ConvertPlugin(BeetsPlugin):
             self._log.info(u'Encoding {0}', util.displayable_path(source))
 
         # Substitute $source and $dest in the argument list.
+        if not six.PY2:
+            command = command.decode(util.arg_encoding(), 'surrogateescape')
+            source = source.decode(util.arg_encoding(), 'surrogateescape')
+            dest = dest.decode(util.arg_encoding(), 'surrogateescape')
+
         args = shlex.split(command)
+        encode_cmd = []
         for i, arg in enumerate(args):
             args[i] = Template(arg).safe_substitute({
-                b'source': source,
-                b'dest': dest,
+                'source': source,
+                'dest': dest,
             })
+            if six.PY2:
+                encode_cmd.append(args[i])
+            else:
+                encode_cmd.append(args[i].encode(util.arg_encoding()))
 
         if pretend:
-            self._log.info(' '.join(ui.decargs(args)))
+            self._log.info(u'{0}', u' '.join(ui.decargs(args)))
             return
 
         try:
-            util.command_output(args)
+            util.command_output(encode_cmd)
         except subprocess.CalledProcessError as exc:
             # Something went wrong (probably Ctrl+C), remove temporary files
             self._log.info(u'Encoding {0} failed. Cleaning up...',
                            util.displayable_path(source))
-            self._log.debug(u'Command {0} exited with status {1}',
-                            exc.cmd.decode('utf8', 'ignore'),
-                            exc.returncode)
+            self._log.debug(u'Command {0} exited with status {1}: {2}',
+                            args,
+                            exc.returncode,
+                            exc.output)
             util.remove(dest)
             util.prune_dirs(os.path.dirname(dest))
             raise
         except OSError as exc:
             raise ui.UserError(
-                u"convert: could invoke '{0}': {1}".format(
-                    ' '.join(args), exc
+                u"convert: couldn't invoke '{0}': {1}".format(
+                    u' '.join(ui.decargs(args)), exc
                 )
             )
 
@@ -218,6 +231,9 @@ class ConvertPlugin(BeetsPlugin):
 
     def convert_item(self, dest_dir, keep_new, path_formats, fmt,
                      pretend=False):
+        """A pipeline thread that converts `Item` objects from a
+        library.
+        """
         command, ext = get_format(fmt)
         item, original, converted = None, None, None
         while True:
@@ -369,61 +385,66 @@ class ConvertPlugin(BeetsPlugin):
                 util.copy(album.artpath, dest)
 
     def convert_func(self, lib, opts, args):
-        if not opts.dest:
-            opts.dest = self.config['dest'].get()
-        if not opts.dest:
+        dest = opts.dest or self.config['dest'].get()
+        if not dest:
             raise ui.UserError(u'no convert destination set')
-        opts.dest = util.bytestring_path(opts.dest)
+        dest = util.bytestring_path(dest)
 
-        if not opts.threads:
-            opts.threads = self.config['threads'].get(int)
+        threads = opts.threads or self.config['threads'].get(int)
 
-        if self.config['paths']:
-            path_formats = ui.get_path_formats(self.config['paths'])
+        path_formats = ui.get_path_formats(self.config['paths'] or None)
+
+        fmt = opts.format or self.config['format'].as_str().lower()
+
+        if opts.pretend is not None:
+            pretend = opts.pretend
         else:
-            path_formats = ui.get_path_formats()
-
-        if not opts.format:
-            opts.format = self.config['format'].get(unicode).lower()
-
-        pretend = opts.pretend if opts.pretend is not None else \
-            self.config['pretend'].get(bool)
-
-        if not pretend:
-            ui.commands.list_items(lib, ui.decargs(args), opts.album)
-
-            if not (opts.yes or ui.input_yn(u"Convert? (Y/n)")):
-                return
+            pretend = self.config['pretend'].get(bool)
 
         if opts.album:
             albums = lib.albums(ui.decargs(args))
-            items = (i for a in albums for i in a.items())
-            if self.config['copy_album_art']:
-                for album in albums:
-                    self.copy_album_art(album, opts.dest, path_formats,
-                                        pretend)
+            items = [i for a in albums for i in a.items()]
+            if not pretend:
+                for a in albums:
+                    ui.print_(format(a, u''))
         else:
-            items = iter(lib.items(ui.decargs(args)))
-        convert = [self.convert_item(opts.dest,
+            items = list(lib.items(ui.decargs(args)))
+            if not pretend:
+                for i in items:
+                    ui.print_(format(i, u''))
+
+        if not items:
+            self._log.error(u'Empty query result.')
+            return
+        if not (pretend or opts.yes or ui.input_yn(u"Convert? (Y/n)")):
+            return
+
+        if opts.album and self.config['copy_album_art']:
+            for album in albums:
+                self.copy_album_art(album, dest, path_formats, pretend)
+
+        convert = [self.convert_item(dest,
                                      opts.keep_new,
                                      path_formats,
-                                     opts.format,
+                                     fmt,
                                      pretend)
-                   for _ in range(opts.threads)]
-        pipe = util.pipeline.Pipeline([items, convert])
+                   for _ in range(threads)]
+        pipe = util.pipeline.Pipeline([iter(items), convert])
         pipe.run_parallel()
 
     def convert_on_import(self, lib, item):
         """Transcode a file automatically after it is imported into the
         library.
         """
-        fmt = self.config['format'].get(unicode).lower()
+        fmt = self.config['format'].as_str().lower()
         if should_transcode(item, fmt):
             command, ext = get_format()
 
             # Create a temporary file for the conversion.
             tmpdir = self.config['tmpdir'].get()
-            fd, dest = tempfile.mkstemp('.' + ext, dir=tmpdir)
+            if tmpdir:
+                tmpdir = util.py3_path(util.bytestring_path(tmpdir))
+            fd, dest = tempfile.mkstemp(util.py3_path(b'.' + ext), dir=tmpdir)
             os.close(fd)
             dest = util.bytestring_path(dest)
             _temp_files.append(dest)  # Delete the transcode later.

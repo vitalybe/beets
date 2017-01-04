@@ -4,7 +4,7 @@
 
 from __future__ import division, absolute_import, print_function
 
-from test._common import unittest
+import unittest
 from beets import importer
 from beets.library import Item
 from beetsplug.ihate import IHatePlugin
@@ -50,5 +50,5 @@ class IHatePluginTest(unittest.TestCase):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

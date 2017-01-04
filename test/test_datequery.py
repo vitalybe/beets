@@ -18,8 +18,8 @@
 from __future__ import division, absolute_import, print_function
 
 from test import _common
-from test._common import unittest
 from datetime import datetime
+import unittest
 import time
 from beets.dbcore.query import _parse_periods, DateInterval, DateQuery
 
@@ -62,14 +62,14 @@ class DateIntervalTest(unittest.TestCase):
         self.assertContains('..', date=datetime.min)
         self.assertContains('..', '1000-01-01T00:00:00')
 
-    def assertContains(self, interval_pattern, date_pattern=None, date=None):
+    def assertContains(self, interval_pattern, date_pattern=None, date=None):  # noqa
         if date is None:
             date = _date(date_pattern)
         (start, end) = _parse_periods(interval_pattern)
         interval = DateInterval.from_periods(start, end)
         self.assertTrue(interval.contains(date))
 
-    def assertExcludes(self, interval_pattern, date_pattern):
+    def assertExcludes(self, interval_pattern, date_pattern):  # noqa
         date = _date(date_pattern)
         (start, end) = _parse_periods(interval_pattern)
         interval = DateInterval.from_periods(start, end)
@@ -127,5 +127,5 @@ def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

@@ -2,6 +2,8 @@
 # Copyright 2016 Bruno Cauet
 # Split an album-file in tracks thanks a cue file
 
+from __future__ import division, absolute_import, print_function
+
 import subprocess
 from os import path
 from glob import glob
@@ -33,7 +35,7 @@ class CuePlugin(BeetsPlugin):
             return
         if len(cues) > 1:
             self._log.info(u"Found multiple cue files doing nothing: {0}",
-                           map(displayable_path, cues))
+                           list(map(displayable_path, cues)))
 
         cue_file = cues[0]
         self._log.info("Found {} for {}", displayable_path(cue_file), item)

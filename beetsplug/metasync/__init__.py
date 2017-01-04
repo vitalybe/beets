@@ -15,12 +15,16 @@
 
 """Synchronize information from music player libraries
 """
+
+from __future__ import division, absolute_import, print_function
+
 from abc import abstractmethod, ABCMeta
 from importlib import import_module
 
 from beets.util.confit import ConfigValueError
 from beets import ui
 from beets.plugins import BeetsPlugin
+import six
 
 
 METASYNC_MODULE = 'beetsplug.metasync'
@@ -32,9 +36,7 @@ SOURCES = {
 }
 
 
-class MetaSource(object):
-    __metaclass__ = ABCMeta
-
+class MetaSource(six.with_metaclass(ABCMeta, object)):
     def __init__(self, config, log):
         self.item_types = {}
         self.config = config

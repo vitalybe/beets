@@ -9,12 +9,14 @@ collection better.
 Installing
 ----------
 
-You will need Python. (Beets is written for `Python 2.7`_. 2.6 support has been
-dropped, and Python 3.x is not yet supported.)
+You will need Python.
+Beets works on `Python 2.7`_ and Python 3.4 or later.
 
 .. _Python 2.7: http://www.python.org/download/
 
-* **Mac OS X** v10.7 (Lion) and later include Python 2.7 out of the box.
+* **macOS** v10.7 (Lion) and later include Python 2.7 out of the box.
+  You can opt for Python 3 by installing it via `Homebrew`_:
+  ``brew install python3``
 
 * On **Debian or Ubuntu**, depending on the version, beets is available as an
   official package (`Debian details`_, `Ubuntu details`_), so try typing:
@@ -42,6 +44,8 @@ dropped, and Python 3.x is not yet supported.)
 
       $ sudo dnf install beets beets-plugins beets-doc
 
+* On **NixOS**, run ``nix-env -i beets``.
+
 .. _copr: https://copr.fedoraproject.org/coprs/afreof/beets/
 .. _dnf package: https://apps.fedoraproject.org/packages/beets
 .. _SlackBuild: http://slackbuilds.org/repository/14.1/multimedia/beets/
@@ -53,19 +57,35 @@ dropped, and Python 3.x is not yet supported.)
 .. _beets is in [community]: https://www.archlinux.org/packages/community/any/beets/
 
 If you have `pip`_, just say ``pip install beets`` (you might need ``sudo`` in
-front of that). On Arch, you'll need to use ``pip2`` instead of ``pip``.
+front of that).
 
 To install without pip, download beets from `its PyPI page`_ and run ``python
 setup.py install`` in the directory therein.
 
 .. _its PyPI page: http://pypi.python.org/pypi/beets#downloads
-.. _pip: http://pip.openplans.org/
+.. _pip: http://www.pip-installer.org/
 
 The best way to upgrade beets to a new version is by running ``pip install -U
 beets``. You may want to follow `@b33ts`_ on Twitter to hear about progress on
 new versions.
 
 .. _@b33ts: http://twitter.com/b33ts
+
+Installing on macOS 10.11 and Higher
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Starting with version 10.11 (El Capitan), macOS has a new security feature
+called `System Integrity Protection`_ (SIP) that prevents you from modifying
+some parts of the system. This means that some ``pip`` commands may fail with
+a permissions error, even when you use ``sudo``. (You probably *won't* run
+into this if you've installed Python yourself with `Homebrew`_ or otherwise.)
+
+If this happens, you can install beets for the current user only (sans
+``sudo``) by typing ``pip install --user beets``. If you do that, you might want
+to add ``~/Library/Python/2.7/bin`` to your ``$PATH``.
+
+.. _System Integrity Protection: https://support.apple.com/en-us/HT204899
+.. _Homebrew: http://brew.sh
 
 Installing on Windows
 ^^^^^^^^^^^^^^^^^^^^^
@@ -117,7 +137,7 @@ favorite text editor. The file will start out empty, but here's good
 place to start::
 
     directory: ~/music
-    library: ~/data/musiclibrary.blb
+    library: ~/data/musiclibrary.db
 
 Change that first path to a directory where you'd like to keep your music. Then,
 for ``library``, choose a good place to keep a database file that keeps an index
@@ -261,8 +281,9 @@ You can always get help using the ``beet help`` command. The plain ``beet help``
 command lists all the available commands; then, for example, ``beet help
 import`` gives more specific help about the ``import`` command.
 
-Please let me know what you think of beets via `the mailing list`_ or
+Please let me know what you think of beets via `the discussion board`_ or
 `Twitter`_.
 
 .. _the mailing list: http://groups.google.com/group/beets-users
+.. _the discussion board: http://discourse.beets.io
 .. _twitter: http://twitter.com/b33ts

@@ -12,30 +12,32 @@
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
 
-from mock import patch
+from __future__ import division, absolute_import, print_function
+
+from mock import patch, Mock
 
 from beets import library
+from beets.util import bytestring_path, _fsencoding
 from beetsplug.ipfs import IPFSPlugin
 
-from test import _common
-from test._common import unittest
-from test.helper import TestHelper
+import unittest
 import os
 
+from test import _common
+from test.helper import TestHelper
 
+
+@patch('beets.util.command_output', Mock())
 class IPFSPluginTest(unittest.TestCase, TestHelper):
 
     def setUp(self):
         self.setup_beets()
         self.load_plugins('ipfs')
-        self.patcher = patch('beets.util.command_output')
-        self.command_output = self.patcher.start()
         self.lib = library.Library(":memory:")
 
     def tearDown(self):
         self.unload_plugins()
         self.teardown_beets()
-        self.patcher.stop()
 
     def test_stored_hashes(self):
         test_album = self.mk_test_album()
@@ -48,9 +50,12 @@ class IPFSPluginTest(unittest.TestCase, TestHelper):
         for check_item in added_album.items():
             try:
                 if check_item.ipfs:
+                    ipfs_item = os.path.basename(want_item.path).decode(
+                        _fsencoding(),
+                    )
                     want_path = '/ipfs/{0}/{1}'.format(test_album.ipfs,
-                                                       os.path.basename(
-                                                           want_item.path))
+                                                       ipfs_item)
+                    want_path = bytestring_path(want_path)
                     self.assertEqual(check_item.path, want_path)
                     self.assertEqual(check_item.ipfs, want_item.ipfs)
                     self.assertEqual(check_item.title, want_item.title)
@@ -91,5 +96,5 @@ class IPFSPluginTest(unittest.TestCase, TestHelper):
 def suite():
     return unittest.TestLoader().loadTestsFromName(__name__)
 
-if __name__ == b'__main__':
+if __name__ == '__main__':
     unittest.main(defaultTest='suite')

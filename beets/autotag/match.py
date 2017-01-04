@@ -22,6 +22,7 @@ from __future__ import division, absolute_import, print_function
 import datetime
 import re
 from munkres import Munkres
+from collections import namedtuple
 
 from beets import logging
 from beets import plugins
@@ -50,6 +51,13 @@ class Recommendation(OrderedEnum):
     low = 1
     medium = 2
     strong = 3
+
+
+# A structure for holding a set of possible matches to choose between. This
+# consists of a list of possible candidates (i.e., AlbumInfo or TrackInfo
+# objects) and a recommendation value.
+
+Proposal = namedtuple('Proposal', ('candidates', 'recommendation'))
 
 
 # Primary matching functionality.
@@ -237,7 +245,7 @@ def distance(items, album_info, mapping):
 
     # Tracks.
     dist.tracks = {}
-    for item, track in mapping.iteritems():
+    for item, track in mapping.items():
         dist.tracks[track] = track_distance(item, track, album_info.va)
         dist.add('tracks', dist.tracks[track].distance)
 
@@ -260,19 +268,23 @@ def match_by_id(items):
     AlbumInfo object for the corresponding album. Otherwise, returns
     None.
     """
-    # Is there a consensus on the MB album ID?
-    albumids = [item.mb_albumid for item in items if item.mb_albumid]
-    if not albumids:
-        log.debug(u'No album IDs found.')
+    albumids = (item.mb_albumid for item in items if item.mb_albumid)
+
+    # Did any of the items have an MB album ID?
+    try:
+        first = next(albumids)
+    except StopIteration:
+        log.debug(u'No album ID found.')
         return None
 
+    # Is there a consensus on the MB album ID?
+    for other in albumids:
+        if other != first:
+            log.debug(u'No album ID consensus.')
+            return None
     # If all album IDs are equal, look up the album.
-    if bool(reduce(lambda x, y: x if x == y else (), albumids)):
-        albumid = albumids[0]
-        log.debug(u'Searching for discovered album ID: {0}', albumid)
-        return hooks.album_for_mbid(albumid)
-    else:
-        log.debug(u'No album ID consensus.')
+    log.debug(u'Searching for discovered album ID: {0}', first)
+    return hooks.album_for_mbid(first)
 
 
 def _recommendation(results):
@@ -311,10 +323,10 @@ def _recommendation(results):
     keys = set(min_dist.keys())
     if isinstance(results[0], hooks.AlbumMatch):
         for track_dist in min_dist.tracks.values():
-            keys.update(track_dist.keys())
+            keys.update(list(track_dist.keys()))
     max_rec_view = config['match']['max_rec']
     for key in keys:
-        if key in max_rec_view.keys():
+        if key in list(max_rec_view.keys()):
             max_rec = max_rec_view[key].as_choice({
                 'strong': Recommendation.strong,
                 'medium': Recommendation.medium,
@@ -324,6 +336,11 @@ def _recommendation(results):
             rec = min(rec, max_rec)
 
     return rec
+
+
+def _sort_candidates(candidates):
+    """Sort candidates by distance."""
+    return sorted(candidates, key=lambda match: match.distance)
 
 
 def _add_candidate(items, results, info):
@@ -370,9 +387,8 @@ def _add_candidate(items, results, info):
 
 def tag_album(items, search_artist=None, search_album=None,
               search_ids=[]):
-    """Return a tuple of a artist name, an album name, a list of
-    `AlbumMatch` candidates from the metadata backend, and a
-    `Recommendation`.
+    """Return a tuple of the current artist name, the current album
+    name, and a `Proposal` containing `AlbumMatch` candidates.
 
     The artist and album are the most common values of these fields
     among `items`.
@@ -400,10 +416,10 @@ def tag_album(items, search_artist=None, search_album=None,
 
     # Search by explicit ID.
     if search_ids:
-        search_cands = []
         for search_id in search_ids:
             log.debug(u'Searching for album ID: {0}', search_id)
-            search_cands.extend(hooks.albums_for_id(search_id))
+            for id_candidate in hooks.albums_for_id(search_id):
+                _add_candidate(items, candidates, id_candidate)
 
     # Use existing metadata or text search.
     else:
@@ -411,7 +427,7 @@ def tag_album(items, search_artist=None, search_album=None,
         id_info = match_by_id(items)
         if id_info:
             _add_candidate(items, candidates, id_info)
-            rec = _recommendation(candidates.values())
+            rec = _recommendation(list(candidates.values()))
             log.debug(u'Album ID match recommendation is {0}', rec)
             if candidates and not config['import']['timid']:
                 # If we have a very good MBID match, return immediately.
@@ -419,7 +435,8 @@ def tag_album(items, search_artist=None, search_album=None,
                 # matches.
                 if rec == Recommendation.strong:
                     log.debug(u'ID match.')
-                    return cur_artist, cur_album, candidates.values(), rec
+                    return cur_artist, cur_album, \
+                        Proposal(list(candidates.values()), rec)
 
         # Search terms.
         if not (search_artist and search_album):
@@ -434,24 +451,25 @@ def tag_album(items, search_artist=None, search_album=None,
         log.debug(u'Album might be VA: {0}', va_likely)
 
         # Get the results from the data sources.
-        search_cands = hooks.album_candidates(items, search_artist,
-                                              search_album, va_likely)
+        for matched_candidate in hooks.album_candidates(items,
+                                                        search_artist,
+                                                        search_album,
+                                                        va_likely):
+            _add_candidate(items, candidates, matched_candidate)
 
-    log.debug(u'Evaluating {0} candidates.', len(search_cands))
-    for info in search_cands:
-        _add_candidate(items, candidates, info)
-
+    log.debug(u'Evaluating {0} candidates.', len(candidates))
     # Sort and get the recommendation.
-    candidates = sorted(candidates.itervalues())
+    candidates = _sort_candidates(candidates.values())
     rec = _recommendation(candidates)
-    return cur_artist, cur_album, candidates, rec
+    return cur_artist, cur_album, Proposal(candidates, rec)
 
 
 def tag_item(item, search_artist=None, search_title=None,
              search_ids=[]):
-    """Attempts to find metadata for a single track. Returns a
-    `(candidates, recommendation)` pair where `candidates` is a list of
-    TrackMatch objects. `search_artist` and `search_title` may be used
+    """Find metadata for a single track. Return a `Proposal` consisting
+    of `TrackMatch` objects.
+
+    `search_artist` and `search_title` may be used
     to override the current metadata for the purposes of the MusicBrainz
     title. `search_ids` may be used for restricting the search to a list
     of metadata backend IDs.
@@ -461,7 +479,7 @@ def tag_item(item, search_artist=None, search_title=None,
     candidates = {}
 
     # First, try matching by MusicBrainz ID.
-    trackids = search_ids or filter(None, [item.mb_trackid])
+    trackids = search_ids or [t for t in [item.mb_trackid] if t]
     if trackids:
         for trackid in trackids:
             log.debug(u'Searching for track ID: {0}', trackid)
@@ -470,18 +488,18 @@ def tag_item(item, search_artist=None, search_title=None,
                 candidates[track_info.track_id] = \
                     hooks.TrackMatch(dist, track_info)
                 # If this is a good match, then don't keep searching.
-                rec = _recommendation(sorted(candidates.itervalues()))
+                rec = _recommendation(_sort_candidates(candidates.values()))
                 if rec == Recommendation.strong and \
                         not config['import']['timid']:
                     log.debug(u'Track ID match.')
-                    return sorted(candidates.itervalues()), rec
+                    return Proposal(_sort_candidates(candidates.values()), rec)
 
     # If we're searching by ID, don't proceed.
     if search_ids:
         if candidates:
-            return sorted(candidates.itervalues()), rec
+            return Proposal(_sort_candidates(candidates.values()), rec)
         else:
-            return [], Recommendation.none
+            return Proposal([], Recommendation.none)
 
     # Search terms.
     if not (search_artist and search_title):
@@ -495,6 +513,6 @@ def tag_item(item, search_artist=None, search_title=None,
 
     # Sort by distance and return with recommendation.
     log.debug(u'Found {0} candidates.', len(candidates))
-    candidates = sorted(candidates.itervalues())
+    candidates = _sort_candidates(candidates.values())
     rec = _recommendation(candidates)
-    return candidates, rec
+    return Proposal(candidates, rec)

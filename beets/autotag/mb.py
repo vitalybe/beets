@@ -20,16 +20,21 @@ from __future__ import division, absolute_import, print_function
 import musicbrainzngs
 import re
 import traceback
-from urlparse import urljoin
+from six.moves.urllib.parse import urljoin
 
 from beets import logging
 import beets.autotag.hooks
 import beets
 from beets import util
 from beets import config
+import six
 
 VARIOUS_ARTISTS_ID = '89ad4ac3-39f7-470e-963a-56509c546377'
-BASE_URL = 'http://musicbrainz.org/'
+
+if util.SNI_SUPPORTED:
+    BASE_URL = 'https://musicbrainz.org/'
+else:
+    BASE_URL = 'http://musicbrainz.org/'
 
 musicbrainzngs.set_useragent('beets', beets.__version__,
                              'http://beets.io/')
@@ -53,8 +58,12 @@ class MusicBrainzAPIError(util.HumanReadableException):
 log = logging.getLogger('beets')
 
 RELEASE_INCLUDES = ['artists', 'media', 'recordings', 'release-groups',
-                    'labels', 'artist-credits', 'aliases']
+                    'labels', 'artist-credits', 'aliases',
+                    'recording-level-rels', 'work-rels',
+                    'work-level-rels', 'artist-rels']
 TRACK_INCLUDES = ['artists', 'aliases']
+if 'work-level-rels' in musicbrainzngs.VALID_INCLUDES['recording']:
+    TRACK_INCLUDES += ['work-level-rels', 'artist-rels']
 
 
 def track_url(trackid):
@@ -69,7 +78,8 @@ def configure():
     """Set up the python-musicbrainz-ngs module according to settings
     from the beets configuration. This should be called at startup.
     """
-    musicbrainzngs.set_hostname(config['musicbrainz']['host'].get(unicode))
+    hostname = config['musicbrainz']['host'].as_str()
+    musicbrainzngs.set_hostname(hostname)
     musicbrainzngs.set_rate_limit(
         config['musicbrainz']['ratelimit_interval'].as_number(),
         config['musicbrainz']['ratelimit'].get(int),
@@ -108,7 +118,7 @@ def _flatten_artist_credit(credit):
     artist_sort_parts = []
     artist_credit_parts = []
     for el in credit:
-        if isinstance(el, basestring):
+        if isinstance(el, six.string_types):
             # Join phrase.
             artist_parts.append(el)
             artist_credit_parts.append(el)
@@ -176,6 +186,33 @@ def track_info(recording, index=None, medium=None, medium_index=None,
 
     if recording.get('length'):
         info.length = int(recording['length']) / (1000.0)
+
+    lyricist = []
+    composer = []
+    for work_relation in recording.get('work-relation-list', ()):
+        if work_relation['type'] != 'performance':
+            continue
+        for artist_relation in work_relation['work'].get(
+                'artist-relation-list', ()):
+            if 'type' in artist_relation:
+                type = artist_relation['type']
+                if type == 'lyricist':
+                    lyricist.append(artist_relation['artist']['name'])
+                elif type == 'composer':
+                    composer.append(artist_relation['artist']['name'])
+    if lyricist:
+        info.lyricist = u', '.join(lyricist)
+    if composer:
+        info.composer = u', '.join(composer)
+
+    arranger = []
+    for artist_relation in recording.get('artist-relation-list', ()):
+        if 'type' in artist_relation:
+            type = artist_relation['type']
+            if type == 'arranger':
+                arranger.append(artist_relation['artist']['name'])
+    if arranger:
+        info.arranger = u', '.join(arranger)
 
     info.decode()
     return info
@@ -260,7 +297,7 @@ def album_info(release):
     )
     info.va = info.artist_id == VARIOUS_ARTISTS_ID
     if info.va:
-        info.artist = config['va_name'].get(unicode)
+        info.artist = config['va_name'].as_str()
     info.asin = release.get('asin')
     info.releasegroup_id = release['release-group']['id']
     info.country = release.get('country')
@@ -329,10 +366,10 @@ def match_album(artist, album, tracks=None):
         # Various Artists search.
         criteria['arid'] = VARIOUS_ARTISTS_ID
     if tracks is not None:
-        criteria['tracks'] = unicode(tracks)
+        criteria['tracks'] = six.text_type(tracks)
 
     # Abort if we have no search terms.
-    if not any(criteria.itervalues()):
+    if not any(criteria.values()):
         return
 
     try:
@@ -358,7 +395,7 @@ def match_track(artist, title):
         'recording': title.lower().strip(),
     }
 
-    if not any(criteria.itervalues()):
+    if not any(criteria.values()):
         return
 
     try:
@@ -376,7 +413,7 @@ def _parse_id(s):
     no ID can be found, return None.
     """
     # Find the first thing that looks like a UUID/MBID.
-    match = re.search(ur'[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}', s)
+    match = re.search(u'[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}', s)
     if match:
         return match.group()
 

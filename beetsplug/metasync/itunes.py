@@ -15,13 +15,16 @@
 
 """Synchronize information from iTunes's library
 """
+
+from __future__ import division, absolute_import, print_function
+
 from contextlib import contextmanager
 import os
 import shutil
 import tempfile
 import plistlib
-import urllib
-from urlparse import urlparse
+
+from six.moves.urllib.parse import urlparse, unquote
 from time import mktime
 
 from beets import util
@@ -54,7 +57,7 @@ def _norm_itunes_path(path):
     # E.g., '\\G:\\Music\\bar' needs to be stripped to 'G:\\Music\\bar'
 
     return util.bytestring_path(os.path.normpath(
-        urllib.unquote(urlparse(path).path)).lstrip('\\')).lower()
+        unquote(urlparse(path).path)).lstrip('\\')).lower()
 
 
 class Itunes(MetaSource):
@@ -94,31 +97,25 @@ class Itunes(MetaSource):
             raise ConfigValueError(u'invalid iTunes library' + hint)
 
         # Make the iTunes library queryable using the path
-        self.collection = {track['Artist'] + "-" + track["Name"]: track
+        self.collection = {_norm_itunes_path(track['Location']): track
                            for track in raw_library['Tracks'].values()
                            if 'Location' in track}
 
     def sync_from_source(self, item):
-        target = item.artist + "-" + item.title
-        result = self.collection.get(target)
+        result = self.collection.get(util.bytestring_path(item.path).lower())
 
         if not result:
-            self._log.warning(u'no iTunes match found for {0}'.format(urllib.quote(target)))
+            self._log.warning(u'no iTunes match found for {0}'.format(item))
             return
 
         item.itunes_rating = result.get('Rating')
         item.itunes_playcount = result.get('Play Count')
         item.itunes_skipcount = result.get('Skip Count')
 
+        if result.get('Play Date UTC'):
+            item.itunes_lastplayed = mktime(
+                result.get('Play Date UTC').timetuple())
 
-        if result.get('Play Date UTC') and result.get('Play Date UTC').timetuple().tm_year >= 1970:
-            try:
-                item.itunes_lastplayed = mktime(result.get('Play Date UTC').timetuple())
-            except Exception as e:
-                print "\tDidn't last played date: " + str(e)
-
-        if result.get('Skip Date') and result.get('Skip Date').timetuple().tm_year >= 1970:
-            try:
-                item.itunes_lastskipped = mktime(result.get('Skip Date').timetuple())
-            except Exception as e:
-                print "\tDidn't set skip date: " + str(e)
+        if result.get('Skip Date'):
+            item.itunes_lastskipped = mktime(
+                result.get('Skip Date').timetuple())

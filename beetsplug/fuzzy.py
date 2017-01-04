@@ -26,13 +26,13 @@ import difflib
 
 class FuzzyQuery(StringFieldQuery):
     @classmethod
-    def string_match(self, pattern, val):
+    def string_match(cls, pattern, val):
         # smartcase
         if pattern.islower():
             val = val.lower()
-        queryMatcher = difflib.SequenceMatcher(None, pattern, val)
+        query_matcher = difflib.SequenceMatcher(None, pattern, val)
         threshold = config['fuzzy']['threshold'].as_number()
-        return queryMatcher.quick_ratio() >= threshold
+        return query_matcher.quick_ratio() >= threshold
 
 
 class FuzzyPlugin(BeetsPlugin):
@@ -44,5 +44,5 @@ class FuzzyPlugin(BeetsPlugin):
         })
 
     def queries(self):
-        prefix = self.config['prefix'].get(basestring)
+        prefix = self.config['prefix'].as_str()
         return {prefix: FuzzyQuery}

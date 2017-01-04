@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import division, absolute_import, print_function
+
 AUTHOR = u'Adrian Sampson'
 
 # General configuration
@@ -13,8 +15,8 @@ master_doc = 'index'
 project = u'beets'
 copyright = u'2016, Adrian Sampson'
 
-version = '1.3'
-release = '1.3.18'
+version = '1.4'
+release = '1.4.3'
 
 pygments_style = 'sphinx'
 
