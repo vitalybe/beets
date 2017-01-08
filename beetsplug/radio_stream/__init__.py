@@ -187,15 +187,7 @@ LAST_FM_API_SECRET = "c07041797ec53a8220807663ae416ac9"
 lastFmConfig = _radio_stream_config["last-fm"]
 lastFmUsername = lastFmConfig["username"]
 lastFmPassword = lastFmConfig["password"]
-if lastFmUsername and lastFmPassword:
-    try:
-        _lastFmNetwork = pylast.LastFMNetwork(api_key=LAST_FM_API_KEY, api_secret=LAST_FM_API_SECRET,
-                                              username=str(lastFmUsername), password_hash=pylast.md5(str(lastFmPassword)))
-    except Exception as e:
-        print("ERROR: Failed to initialize LastFm service: " + str(e))
-else:
-    _lastFmNetwork = None
-    print("NOTE: LastFm not configured")
+_lastFmNetwork = None
 
 @app.route('/playlists')
 def playlists():
@@ -284,7 +276,20 @@ class RadioStreamPlugin(BeetsPlugin):
             print_(u"Track: {0} Scores: {1}=[{2}]".format(item_string, score_sum, score_string))
 
     def start_server_command(self, lib, opts, args):
+        global _lastFmNetwork
+
         args = ui.decargs(args)
+
+        if lastFmUsername and lastFmPassword:
+            try:
+                _lastFmNetwork = pylast.LastFMNetwork(api_key=LAST_FM_API_KEY, api_secret=LAST_FM_API_SECRET,
+                                                    username=str(lastFmUsername), password_hash=pylast.md5(str(lastFmPassword)))
+                print("Last.fm scrobbling enabled")
+            except Exception as e:
+                print("ERROR: Failed to initialize LastFm service: " + str(e))
+        else:
+            _lastFmNetwork = None
+            print("NOTE: LastFm not configured")
 
         self.config.add({
             'host': u'0.0.0.0',
