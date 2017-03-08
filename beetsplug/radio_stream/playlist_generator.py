@@ -84,7 +84,7 @@ def rule_not_played_too_early(track, power=-1000):
 
 
 def rule_play_count(track, power=-15):
-    MAX_COUNT = 30
+    MAX_COUNT = 100
     playcount = track.get("playcount", 0)
     return min(MAX_COUNT, float(playcount)) / MAX_COUNT * power
 
