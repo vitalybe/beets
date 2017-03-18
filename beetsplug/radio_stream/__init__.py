@@ -30,12 +30,14 @@ from werkzeug.routing import BaseConverter, PathConverter
 import os
 import json
 import logging
-from beetsplug.radio_stream import playlist_generator
 from beets.ui import print_, decargs
 from beets.dbcore import types
 from beets.library import DateType
 import time
 import pylast
+
+from beetsplug.radio_stream import playlist_generator
+from beetsplug.radio_stream.settings import Settings, Playlist, save_settings, load_settings
 
 # Utilities.
 
@@ -85,50 +87,14 @@ def json_generator(items, root):
     yield ']}'
 
 
-def resource(name):
-    """Decorates a function to handle RESTful HTTP requests for a resource.
-    """
-    def make_responder(retriever):
-        def responder(ids):
-            entities = [retriever(id) for id in ids]
-            entities = [entity for entity in entities if entity]
-
-            if len(entities) == 1:
-                return flask.jsonify(_rep(entities[0]))
-            elif entities:
-                return app.response_class(
-                    json_generator(entities, root=name),
-                    mimetype='application/json'
-                )
-            else:
-                return flask.abort(404)
-        responder.__name__ = b'get_%s' % name.encode('utf8')
-        return responder
-    return make_responder
-
-
-def resource_query(name):
-    """Decorates a function to handle RESTful HTTP queries for resources.
-    """
-    def make_responder(query_func):
-        def responder(queries):
-            return app.response_class(
-                json_generator(query_func(queries), root='results'),
-                mimetype='application/json'
-            )
-        responder.__name__ = b'query_%s' % name.encode('utf8')
-        return responder
-    return make_responder
-
-
 def resource_list(name):
     """Decorates a function to handle RESTful HTTP request for a list of
     resources.
     """
     def make_responder(list_all):
-        def responder():
+        def responder(*args, **kwargs):
             return app.response_class(
-                json_generator(list_all(), root=name),
+                json_generator(list_all(*args, **kwargs), root=name),
                 mimetype='application/json'
             )
         responder.__name__ = b'all_%s' % name.encode('utf8')
@@ -176,9 +142,9 @@ def before_request():
 
 # Smart playlists
 _radio_stream_config = config['radio-stream']
-_playlists_config = _radio_stream_config["playlists"]
-
-_playlists = {str(playlist["name"]): unicode(playlist["query"]) for playlist in _playlists_config}
+_settings = load_settings()
+if _settings is None:
+    _settings = Settings()
 
 # Last.fm integration
 LAST_FM_API_KEY = "9e46560f972eb8300c78c0fc837d1c13"  # this is a sample key
@@ -192,14 +158,56 @@ _lastFmNetwork = None
 @app.route('/playlists')
 def playlists():
     return flask.jsonify({
-        'playlists': _playlists.keys()
+        'playlists': _settings.playlists.keys()
     })
 
 
-@app.route('/playlists/<queries>')
-@resource_query('playlist_items')
-def playlist_by_name(queries):
-    query = _playlists[queries]
+@app.route('/playlists/<name>')
+@resource_list('results')
+def playlist_by_name(name):
+    print("getting playlist: " + name)
+    query = _settings.playlists[name].query
+    tracks = playlist_generator.generate_playlist(g.lib, 30, True, query)
+
+    return tracks
+
+
+@app.route('/playlists', methods=["PUT"])
+def create_playlist():
+    playlist_data = request.get_json()
+    name = playlist_data["name"]
+    query = playlist_data["query"]
+    if name and query:
+        _settings.playlists[name] = Playlist(name, query, True)
+        save_settings(_settings)
+        return "", 200
+    else:
+        raise Exception("missing arguments")
+
+
+@app.route('/playlists', methods=["DELETE"])
+def delete_playlist():
+    playlist_data = request.get_json()
+    name = playlist_data["name"]
+    if not name:
+        raise Exception("missing arguments")
+    if name not in _settings.playlists:
+        raise Exception("playlist '{0}' does not exist".format(name))
+    else:
+        del _settings.playlists[name]
+        save_settings(_settings)
+        return "", 200
+
+
+@app.route('/preview-playlist')
+@resource_list('playlist_preview_items')
+def preview_playlist():
+    query = request.args.get('query')
+    print("Query: " + query)
+    if query is None:
+        raise Exception("query parameter is required")
+
+    print("getting tracks")
     tracks = playlist_generator.generate_playlist(g.lib, 30, True, query)
 
     return tracks
@@ -253,14 +261,16 @@ class RadioStreamPlugin(BeetsPlugin):
         name_column_length = 60
         count = 10
 
+        self._log.info(config.user_config_path())
+
         if opts.count:
             count = int(opts.count)
 
         if opts.playlist:
-            if opts.playlist not in _playlists:
+            if opts.playlist not in _settings.playlists:
                 self._log.error(u'Playlist not defined: {}'.format(opts.playlist))
                 return
-            query = _playlists[opts.playlist].split(u" ")
+            query = _settings.playlists[opts.playlist].query.split(u" ")
         else:
             query = decargs(args)
 
