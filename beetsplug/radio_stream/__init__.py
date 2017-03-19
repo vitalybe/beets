@@ -16,6 +16,7 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
+import numbers
 from datetime import datetime
 import time
 
@@ -25,7 +26,7 @@ from beets import util
 from beets import config
 import beets.library
 import flask
-from flask import g, request
+from flask import g, request, abort
 from werkzeug.routing import BaseConverter, PathConverter
 import os
 import json
@@ -37,7 +38,7 @@ import time
 import pylast
 
 from beetsplug.radio_stream import playlist_generator
-from beetsplug.radio_stream.settings import Settings, Playlist, save_settings, load_settings
+from beetsplug.radio_stream.settings import Settings, Playlist
 
 # Utilities.
 
@@ -142,9 +143,7 @@ def before_request():
 
 # Smart playlists
 _radio_stream_config = config['radio-stream']
-_settings = load_settings()
-if _settings is None:
-    _settings = Settings()
+_settings = Settings.load()
 
 # Last.fm integration
 LAST_FM_API_KEY = "9e46560f972eb8300c78c0fc837d1c13"  # this is a sample key
@@ -154,6 +153,10 @@ lastFmConfig = _radio_stream_config["last-fm"]
 lastFmUsername = lastFmConfig["username"]
 lastFmPassword = lastFmConfig["password"]
 _lastFmNetwork = None
+
+
+def bad_request(message):
+    abort(flask.make_response(flask.jsonify(message=message), 400))
 
 @app.route('/playlists')
 def playlists():
@@ -167,7 +170,7 @@ def playlists():
 def playlist_by_name(name):
     print("getting playlist: " + name)
     query = _settings.playlists[name].query
-    tracks = playlist_generator.generate_playlist(g.lib, 30, True, query)
+    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, True, query)
 
     return tracks
 
@@ -179,10 +182,10 @@ def create_playlist():
     query = playlist_data["query"]
     if name and query:
         _settings.playlists[name] = Playlist(name, query, True)
-        save_settings(_settings)
+        _settings.save()
         return "", 200
     else:
-        raise Exception("missing arguments")
+        bad_request("missing arguments")
 
 
 @app.route('/playlists', methods=["DELETE"])
@@ -190,12 +193,12 @@ def delete_playlist():
     playlist_data = request.get_json()
     name = playlist_data["name"]
     if not name:
-        raise Exception("missing arguments")
+        bad_request("missing arguments")
     if name not in _settings.playlists:
-        raise Exception("playlist '{0}' does not exist".format(name))
+        bad_request("playlist '{0}' does not exist".format(name))
     else:
         del _settings.playlists[name]
-        save_settings(_settings)
+        _settings.save()
         return "", 200
 
 
@@ -205,10 +208,10 @@ def preview_playlist():
     query = request.args.get('query')
     print("Query: " + query)
     if query is None:
-        raise Exception("query parameter is required")
+        bad_request("query parameter is required")
 
     print("getting tracks")
-    tracks = playlist_generator.generate_playlist(g.lib, 30, True, query)
+    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, True, query)
 
     return tracks
 
@@ -243,6 +246,26 @@ def update_last_played(id):
     return "", 200
 
 
+@app.route('/rules')
+def get_rules():
+    return flask.jsonify(_settings.rules.__dict__)
+
+
+@app.route('/rules', methods=["PUT"])
+def update_rules():
+    new_rules = request.get_json()
+    for ruleName in new_rules:
+        new_value = new_rules[ruleName]
+        if not isinstance(new_value, numbers.Real):
+            bad_request("rule {0} value must be a number: {1}".format(ruleName, new_value))
+        elif ruleName not in _settings.rules.__dict__:
+            bad_request("rule name doesn't exist: " + ruleName)
+        else:
+            _settings.rules.__dict__[ruleName] = new_value
+            _settings.save()
+
+    return "", 200
+
 # Plugin hook.
 class RadioStreamPlugin(BeetsPlugin):
 
@@ -274,7 +297,7 @@ class RadioStreamPlugin(BeetsPlugin):
         else:
             query = decargs(args)
 
-        items = playlist_generator.generate_playlist(lib, count, opts.shuffle, u" ".join(query))
+        items = playlist_generator.generate_playlist(lib, _settings.rules, count, opts.shuffle, u" ".join(query))
 
         for item in items:
             score_string = ", ".join(['%s: %s' % (key.replace("rule_", ""), value) for (key, value) in sorted(item.scores.items())])
