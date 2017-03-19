@@ -107,7 +107,7 @@ def post_rule_limit_artists(sorted_tracks, rules_settings):
     for track in sorted_tracks:
         if track.artist in artists:
             artists[track.artist] += 1
-            score = -(artists[track.artist] * rules_settings.limit_artists_power)
+            score = -(artists[track.artist] ** rules_settings.limit_artists_power)
             track.scores["post_rule_limit_artists"] = score
             log.debug(u"Post score 'post_rule_limit_artists' to track  {0}: {1}".format(track, score))
         else:
@@ -126,7 +126,7 @@ def post_rule_limit_low_rating(sorted_tracks, rules_settings):
         rating = track.get("rating", 0)
         if low_rating >= rating > 0:
             rating_count += 1
-            score = -(rating_count*power)
+            score = -(rating_count ** power)
             track.scores[rule_name] = score
             log.debug(u"Post score '{0}', to track {1}: {2}".format(rule_name, track, score))
 
