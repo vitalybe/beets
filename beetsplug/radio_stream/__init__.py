@@ -216,7 +216,7 @@ def preview_playlist():
 
     print("getting tracks")
     query = ignore_deleted_in_query(query)
-    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, True, query)
+    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, False, query)
 
     return tracks
 
