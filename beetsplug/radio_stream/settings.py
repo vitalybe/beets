@@ -7,7 +7,7 @@ from beets import logging
 _beets_log = logging.getLogger('beets')
 _log = _beets_log.getChild("radio-stream-settings")
 _settings_file = path.join(path.dirname(config.user_config_path()), "radio-stream.pickle")
-_log.info("settings location: " + _settings_file)
+_log.debug("settings location: " + _settings_file)
 
 
 class Settings:

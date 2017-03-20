@@ -135,7 +135,7 @@ def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
     RULES = [rule_rating, rule_not_played_too_early, rule_play_count, rule_new_song, rule_play_last_time]
 
     log.debug(u"Getting tracks")
-    log.debug("Querying: " + input_query)
+    log.info("Querying: " + input_query)
     items = lib.items(input_query)
 
     log.debug(u"Running rules")

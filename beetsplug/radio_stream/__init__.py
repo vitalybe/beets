@@ -158,6 +158,9 @@ _lastFmNetwork = None
 def bad_request(message):
     abort(flask.make_response(flask.jsonify(message=message), 400))
 
+def ignore_deleted_in_query(query):
+    return query + " ^deleted:1"
+
 @app.route('/playlists')
 def playlists():
     return flask.jsonify({
@@ -170,6 +173,7 @@ def playlists():
 def playlist_by_name(name):
     print("getting playlist: " + name)
     query = _settings.playlists[name].query
+    query = ignore_deleted_in_query(query)
     tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, True, query)
 
     return tracks
@@ -211,9 +215,20 @@ def preview_playlist():
         bad_request("query parameter is required")
 
     print("getting tracks")
+    query = ignore_deleted_in_query(query)
     tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 30, True, query)
 
     return tracks
+
+
+@app.route('/item/<id>', methods=["DELETE"])
+def mark_as_deleted(id):
+    track = g.lib.get_item(id)
+    track.deleted = 1
+    with g.lib.transaction():
+        track.try_sync(True, False)
+
+    return "", 200
 
 
 @app.route('/item/<id>/rating', methods=["PUT"])
@@ -297,7 +312,9 @@ class RadioStreamPlugin(BeetsPlugin):
         else:
             query = decargs(args)
 
-        items = playlist_generator.generate_playlist(lib, _settings.rules, count, opts.shuffle, u" ".join(query))
+        query = u" ".join(query)
+        query = ignore_deleted_in_query(query)
+        items = playlist_generator.generate_playlist(lib, _settings.rules, count, opts.shuffle, query)
 
         for item in items:
             score_string = ", ".join(['%s: %s' % (key.replace("rule_", ""), value) for (key, value) in sorted(item.scores.items())])
