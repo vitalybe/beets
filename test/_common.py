@@ -163,7 +163,7 @@ class TestCase(unittest.TestCase, Assertions):
         self.temp_dir = util.bytestring_path(tempfile.mkdtemp())
 
         beets.config['statefile'] = \
-            util.py3_path(os.path.join(self.temp_dir, b'state.pickle'))
+            util.py3_path(os.path.join(self.temp_dir, b'state.  pickle'))
         beets.config['library'] = \
             util.py3_path(os.path.join(self.temp_dir, b'library.db'))
         beets.config['directory'] = \
