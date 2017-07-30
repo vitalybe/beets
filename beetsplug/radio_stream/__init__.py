@@ -163,10 +163,7 @@ def ignore_deleted_in_query(query):
 
 @app.route('/playlists')
 def playlists():
-    return flask.jsonify({
-        'playlists': _settings.playlists.keys()
-    })
-
+    return flask.jsonify(_settings.playlists.__dict__)
 
 @app.route('/playlists/<name>')
 @resource_list('results')
