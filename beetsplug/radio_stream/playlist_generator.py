@@ -142,9 +142,9 @@ def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
     run_rules(items, RULES, rules_settings)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     log.debug(u"Running post rules")
-    post_rule_limit_artists(sorted_tracks, rules_settings)
-    sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     post_rule_limit_low_rating(sorted_tracks, rules_settings)
+    sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
+    post_rule_limit_artists(sorted_tracks, rules_settings)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
 
     trimmed_tracks = sorted_tracks[0:count]
