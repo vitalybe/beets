@@ -222,11 +222,11 @@ def preview_playlist():
 @resource_list('songs')
 def preview_playlist():
     query = request.args.get('query')
-    print("Query: " + query)
     if query is None:
-        query = ""
+        query = u""
 
     return g.lib.items(query)
+
 
 @app.route('/item/<id>', methods=["DELETE"])
 def mark_as_deleted(id):
