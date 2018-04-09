@@ -16,6 +16,7 @@
 """
 import sys
 import random
+from collections import OrderedDict
 from datetime import datetime
 
 from beets import ui, logging
@@ -47,7 +48,7 @@ def rule_play_last_time(track, rules_settings):
 
     if "lastplayed" in track:
         last_played = datetime.fromtimestamp(track.lastplayed)
-        days_passed = (datetime.now()-last_played).days
+        days_passed = (datetime.now() - last_played).days
     else:
         days_passed = sys.maxint
 
@@ -59,7 +60,7 @@ def rule_play_last_time(track, rules_settings):
 def rule_not_played_too_early(track, rules_settings):
     if "lastplayed" in track:
         last_played = datetime.fromtimestamp(track.lastplayed)
-        days_passed = (datetime.now()-last_played).days
+        days_passed = (datetime.now() - last_played).days
     else:
         days_passed = sys.maxint
 
@@ -145,6 +146,31 @@ def post_rule_limit_low_rating(sorted_tracks, rules_settings, final_count):
                 log.debug(u"Applied '{}' to track {}".format(rule_name, track))
 
 
+def special_rule_limit_new_song_albums(tracks, rules_settings):
+    """Hide all new albums except specified amount"""
+
+    rule_name = "rule_limit_new_song_albums"
+    new_albums_count = rules_settings.limit_new_albums_count
+
+    tracks_formatted = [{
+            "id": track.artist + " - " + track.album, "rating": track.rating, "playcount": track.get("playcount", 0),
+            "item": track
+         } for track in tracks
+    ]
+    new_albums_ids = set([track["id"] for track in tracks_formatted if track["rating"] == 0])
+
+    if len(new_albums_ids) > 0:
+        # following line also includes new album songs that are already not new (rated)
+        new_album_tracks = [track for track in tracks_formatted if track["id"] in new_albums_ids]
+        most_played_new_tracks = sorted(new_album_tracks, key=lambda track: -track["playcount"])
+        most_played_new_albums_ids = list(OrderedDict.fromkeys([track["id"] for track in most_played_new_tracks]))
+        limited_new_albums_ids = most_played_new_albums_ids[0:new_albums_count]
+
+        for track in [track for track in new_album_tracks if track["id"] not in limited_new_albums_ids]:
+            real_track = track["item"]
+            real_track.scores[rule_name] = -1000
+
+
 def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
     RULES = [rule_rating, rule_not_played_too_early, rule_play_count, rule_new_song, rule_play_last_time]
 
@@ -154,6 +180,8 @@ def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
 
     log.debug(u"Running rules")
     run_rules(items, RULES, rules_settings)
+    log.debug(u"Limit new songs albums")
+    special_rule_limit_new_song_albums(items, rules_settings)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     log.debug(u"Running post rules")
     post_rule_limit_low_rating(sorted_tracks, rules_settings, count)

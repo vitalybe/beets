@@ -192,20 +192,21 @@ class PlaylistGeneratorTest(unittest.TestCase):
         rules = Rules()
         rules.limit_new_albums_count = 1
         rules.limit_new_songs_percent = 100
+        rules.limit_artists_percent = 100
 
         songs = []
         song_count = 5
         for i in range(song_count):
-            song = self._song("new songs", unique_artist_album=True)
+            song = self._song("new songs", unique_artist_album=False)
             song.rating = 0
             songs.append(song)
 
         for i in range(song_count):
-            song = self._song("high rating", unique_artist_album=True)
+            song = self._song("high rating", unique_artist_album=False)
             self._song_played_days_ago(song, rules.star_3_min_days + 1)
             songs.append(song)
 
-        song = self._song("expected new song", unique_artist_album=True)
+        song = self._song("expected new song", unique_artist_album=False)
         song["playcount"] = 3
         song.rating = 0
         songs.append(song)
@@ -229,16 +230,17 @@ class PlaylistGeneratorTest(unittest.TestCase):
         rules = Rules()
         rules.limit_new_albums_count = 1
         rules.limit_new_songs_percent = 100
+        rules.limit_artists_percent = 100
 
         songs = []
         song_count = 5
         for i in range(song_count*2):
-            song = self._song("new songs", unique_artist_album=True)
+            song = self._song("new songs", unique_artist_album=False)
             song.rating = 0
             songs.append(song)
 
         for i in range(song_count):
-            song = self._song("high rating", unique_artist_album=True)
+            song = self._song("high rating", unique_artist_album=False)
             self._song_played_days_ago(song, rules.star_3_min_days + 1)
             songs.append(song)
 
