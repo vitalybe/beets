@@ -114,6 +114,17 @@ def post_rule_limit_artists(sorted_tracks, rules_settings):
             artists[track.artist] = 0
 
 
+def post_rule_limit_new_songs(sorted_tracks, rules_settings, final_count):
+    max_count = round(final_count / 100.0 * rules_settings.limit_new_songs_percent)
+
+    new_song_count = 0
+    for track in sorted_tracks:
+        if track.rating == 0:
+            new_song_count += 1
+            if new_song_count > max_count:
+                track.scores["post_rule_limit_new_songs_amount"] = -1000
+
+
 def post_rule_limit_low_rating(sorted_tracks, rules_settings):
     """Reduce the score of tracks with low rating"""
     power = rules_settings.limit_low_rating_power
@@ -143,8 +154,8 @@ def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     log.debug(u"Running post rules")
     post_rule_limit_low_rating(sorted_tracks, rules_settings)
-    sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     post_rule_limit_artists(sorted_tracks, rules_settings)
+    post_rule_limit_new_songs(sorted_tracks, rules_settings, count)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
 
     trimmed_tracks = sorted_tracks[0:count]

@@ -70,6 +70,9 @@ class Rules:
         self.limit_low_rating_from = 40
         self.limit_low_rating_power = 2
 
+        self.limit_new_songs_percent = 30
+
+
 
 class Playlist:
     def __init__(self, name, query, can_delete):
