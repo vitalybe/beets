@@ -66,10 +66,10 @@ class Rules:
         self.unrated_min_days = 0
 
         self.limit_low_rating_from = 40
-        self.limit_low_rating_percent = 30
+        self.limit_low_rating_percent = 10
 
-        self.limit_artists_percent = 30
-        self.limit_new_songs_percent = 30
+        self.limit_artists_percent = 10
+        self.limit_new_songs_percent = 10
 
         self.limit_new_albums_count = 1
 

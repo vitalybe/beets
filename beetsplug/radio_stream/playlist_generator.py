@@ -122,7 +122,7 @@ def post_rule_limit_new_songs(sorted_tracks, rules_settings, final_count):
 
     new_song_count = 0
     for track in sorted_tracks:
-        if track.rating == 0:
+        if track.get("rating", 0) == 0:
             new_song_count += 1
             if new_song_count > max_count:
                 track.scores["post_rule_limit_new_songs_amount"] = -1000
@@ -153,7 +153,7 @@ def special_rule_limit_new_song_albums(tracks, rules_settings):
     new_albums_count = rules_settings.limit_new_albums_count
 
     tracks_formatted = [{
-            "id": track.artist + " - " + track.album, "rating": track.rating, "playcount": track.get("playcount", 0),
+            "id": track.artist + " - " + track.album, "rating": track.get("rating", 0), "playcount": track.get("playcount", 0),
             "item": track
          } for track in tracks
     ]
