@@ -58,14 +58,14 @@ class Rules:
         self.new_song_power = 30
 
         self.unrated_power = -1000
-        self.unrated_star_1_min_days = 84
-        self.unrated_star_2_min_days = 42
-        self.unrated_star_3_min_days = 21
-        self.unrated_star_4_min_days = 16
-        self.unrated_star_5_min_days = 14
+        self.star_1_min_days = 84
+        self.star_2_min_days = 42
+        self.star_3_min_days = 21
+        self.star_4_min_days = 16
+        self.star_5_min_days = 14
         self.unrated_min_days = 3
 
-        self.limit_artists_power = 2
+        self.limit_artists_power = 3
 
         self.limit_low_rating_from = 40
         self.limit_low_rating_power = 2

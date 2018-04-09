@@ -65,11 +65,11 @@ def rule_not_played_too_early(track, rules_settings):
 
     min_days_for_rating = {
         # Rating: Min days
-        20: rules_settings.unrated_star_1_min_days,
-        40: rules_settings.unrated_star_2_min_days,
-        60: rules_settings.unrated_star_3_min_days,
-        80: rules_settings.unrated_star_4_min_days,
-        100: rules_settings.unrated_star_5_min_days,
+        20: rules_settings.star_1_min_days,
+        40: rules_settings.star_2_min_days,
+        60: rules_settings.star_3_min_days,
+        80: rules_settings.star_4_min_days,
+        100: rules_settings.star_5_min_days,
         # Unrated (new) songs
         0: rules_settings.unrated_min_days
     }
