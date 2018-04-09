@@ -55,20 +55,25 @@ class PlaylistGeneratorTest(unittest.TestCase):
     def _print_songs(self, songs):
         sorted_songs = sorted(songs, key=lambda song: -sum(song.scores.values()))
 
-        data = [[song.artist, song.album, song.title, human(song.lastplayed), sum(song.scores.values()),
+        data = [[song.artist, song.album, song.title, human(song.lastplayed), song.get("playcount", 0), song.get("rating", 0),
+                 sum(song.scores.values()),
                  song.scores["rule_rating"], song.scores["rule_not_played_too_early"], song.scores["rule_play_count"],
                  song.scores["rule_new_song"], song.scores["rule_play_last_time"],
-                 song.scores.get("post_rule_limit_artists", 0), song.scores.get("post_rule_limit_by_low_rating", 0)
+                 song.scores.get("post_rule_limit_artists", 0), song.scores.get("post_rule_limit_by_low_rating", 0),
+                 song.scores.get("post_rule_limit_new_songs_amount", 0)
                  ] for song
                 in sorted_songs]
 
-        return tabulate(data, headers=["artist", "album", "title", "lastplayed", "score", "rule_rating",
-                                       "rule_not_played_too_early",
-                                       "rule_play_count",
-                                       "rule_new_song",
-                                       "rule_play_last_time",
-                                       "post_rule_limit_artists",
-                                       "post_rule_limit_by_low_rating"], tablefmt='rst')
+        return tabulate(data, headers=["artist", "album", "title", "lastplayed", "playcount", "rating", "score",
+                                       "r_rating",
+                                       "r_not_early",
+                                       "r_play_counyt",
+                                       "r_new_song",
+                                       "r_last_play",
+                                       "pr_artists",
+                                       "pr_low_rating",
+                                       "pr_new_songs",
+                                       ], tablefmt='rst')
 
     @freeze_time(FREEZED_DATE)
     def test_prefer_songs_played_long_ago(self):
@@ -100,26 +105,164 @@ class PlaylistGeneratorTest(unittest.TestCase):
         songs = []
 
         rules.limit_new_songs_percent = 10
-        SONG_COUNT = rules.limit_new_songs_percent
+        song_count = rules.limit_new_songs_percent
 
-        for i in range(SONG_COUNT):
-            song1 = self._song("new song", True)
-            song1.rating = 0
-            songs.append(song1)
+        for i in range(song_count):
+            song = self._song("new song", True)
+            song.rating = 0
+            songs.append(song)
 
-        for i in range(SONG_COUNT):
-            song1 = self._song("rated song", True)
-            songs.append(song1)
+        for i in range(song_count):
+            song = self._song("rated song", True)
+            songs.append(song)
 
         lib = TestLib(songs)
 
-        result_songs = playlist_generator.generate_playlist(lib, rules, SONG_COUNT, False)
-        new_songs_count = sum(1 if song.title == "new song" else 0 for song in result_songs)
-        expected_count = SONG_COUNT / 100 * rules.limit_new_songs_percent
-        self.assertTrue(new_songs_count == expected_count,
+        result_songs = playlist_generator.generate_playlist(lib, rules, song_count, False)
+        actual_count = sum(1 if song.title == "new song" else 0 for song in result_songs)
+        expected_count = song_count / 100 * rules.limit_new_songs_percent
+        self.assertTrue(actual_count == expected_count,
                         "expected {} new songs, found {}:\n{}\n\nList of original songs:\n{}".format(
-                            expected_count, new_songs_count,
+                            expected_count, actual_count,
                             self._print_songs(result_songs), self._print_songs(songs)))
+
+    @freeze_time(FREEZED_DATE)
+    def test_limit_amount_of_same_artist(self):
+
+        rules = Rules()
+        songs = []
+
+        rules.limit_artists_percent = 10
+
+        expected_percent = rules.limit_artists_percent
+        song_count = rules.limit_artists_percent
+
+        for i in range(song_count):
+            song = self._song("same artist", False)
+            songs.append(song)
+
+        for i in range(song_count):
+            song = self._song("different artist", True)
+            songs.append(song)
+
+        lib = TestLib(songs)
+
+        result_songs = playlist_generator.generate_playlist(lib, rules, song_count, False)
+        actual_count = sum(1 if song.title == "same artist" else 0 for song in result_songs)
+        expected_count = song_count / 100 * expected_percent
+        self.assertTrue(actual_count == expected_count,
+                        "expected {} new songs, found {}:\n{}\n\nList of original songs:\n{}".format(
+                            expected_count, actual_count,
+                            self._print_songs(result_songs), self._print_songs(songs)))
+
+    @freeze_time(FREEZED_DATE)
+    def test_limit_amount_of_low_rating(self):
+
+        rules = Rules()
+        songs = []
+
+        rules.limit_low_rating_percent = 10
+
+        expected_percent = rules.limit_low_rating_percent
+        song_count = rules.limit_low_rating_percent
+
+        for i in range(song_count):
+            song = self._song("low rating", True)
+            song.rating = 20
+            songs.append(song)
+
+        for i in range(song_count):
+            song = self._song("high rating", True)
+            self._song_played_days_ago(song, rules.star_3_min_days + 1)
+            songs.append(song)
+
+        lib = TestLib(songs)
+
+        result_songs = playlist_generator.generate_playlist(lib, rules, song_count, False)
+        actual_count = sum(1 if song.title == "low rating" else 0 for song in result_songs)
+        expected_count = song_count / 100 * expected_percent
+        self.assertTrue(actual_count == expected_count,
+                        "expected {} new songs, found {}:\n{}\n\nList of original songs:\n{}".format(
+                            expected_count, actual_count,
+                            self._print_songs(result_songs), self._print_songs(songs)))
+
+    @freeze_time(FREEZED_DATE)
+    def test_limit_new_albums_by_new_song(self):
+
+        rules = Rules()
+        rules.limit_new_albums_count = 1
+        rules.limit_new_songs_percent = 100
+
+        songs = []
+        song_count = 5
+        for i in range(song_count):
+            song = self._song("new songs", unique_artist_album=True)
+            song.rating = 0
+            songs.append(song)
+
+        for i in range(song_count):
+            song = self._song("high rating", unique_artist_album=True)
+            self._song_played_days_ago(song, rules.star_3_min_days + 1)
+            songs.append(song)
+
+        song = self._song("expected new song", unique_artist_album=True)
+        song["playcount"] = 3
+        song.rating = 0
+        songs.append(song)
+
+        lib = TestLib(songs)
+        result_songs = playlist_generator.generate_playlist(lib, rules, song_count, False)
+
+        error_info = "\n\nResult songs:\n{}\n\nList of original songs:\n{}".format(self._print_songs(result_songs),
+                                                                                   self._print_songs(songs))
+
+        specific_song_found = any(result_song.title == "expected new song" for result_song in result_songs)
+        self.assertTrue(specific_song_found, "expected 'expected new song' that wasn't found" + error_info)
+
+        new_songs_count = sum(1 if song.title == "new songs" else 0 for song in result_songs)
+        self.assertTrue(new_songs_count == 0, "expected 0 new songs, found {}".format(new_songs_count) + error_info)
+
+
+    @freeze_time(FREEZED_DATE)
+    def test_limit_new_albums_by_not_new_song(self):
+
+        rules = Rules()
+        rules.limit_new_albums_count = 1
+        rules.limit_new_songs_percent = 100
+
+        songs = []
+        song_count = 5
+        for i in range(song_count*2):
+            song = self._song("new songs", unique_artist_album=True)
+            song.rating = 0
+            songs.append(song)
+
+        for i in range(song_count):
+            song = self._song("high rating", unique_artist_album=True)
+            self._song_played_days_ago(song, rules.star_3_min_days + 1)
+            songs.append(song)
+
+        # this song isn't technically new but it is used to find other new songs
+        song = self._song("expected new song", unique_artist_album=False)
+        song["playcount"] = 3
+        songs.append(song)
+
+        song = self._song("expected new song", unique_artist_album=False)
+        song.rating = 0
+        songs.append(song)
+
+
+        lib = TestLib(songs)
+        result_songs = playlist_generator.generate_playlist(lib, rules, song_count, False)
+
+        error_info = "\n\nResult songs:\n{}\n\nList of original songs:\n{}".format(self._print_songs(result_songs),
+                                                                               self._print_songs(songs))
+
+        specific_song_found = any(result_song.title == "expected new song" for result_song in result_songs)
+        self.assertTrue(specific_song_found, "expected 'expected new song' that wasn't found" + error_info)
+
+        new_songs_count = sum(1 if song.title == "new songs" else 0 for song in result_songs)
+        self.assertTrue(new_songs_count == 0, "expected 0 new songs, found {}".format(new_songs_count) + error_info)
 
 
 def suite():

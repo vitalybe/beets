@@ -76,7 +76,7 @@ def rule_not_played_too_early(track, rules_settings):
 
     rating = track.get("rating", 0)
     min_days = min_days_for_rating.get(rating, None)
-    if not min_days:
+    if min_days is None:
         raise KeyError("Invalid rating: %s" % track)
 
     if days_passed < min_days:
@@ -100,18 +100,20 @@ def rule_new_song(track, rules_settings):
         return 0
 
 
-def post_rule_limit_artists(sorted_tracks, rules_settings):
+def post_rule_limit_artists(sorted_tracks, rules_settings, final_count):
     """Reduce the score of tracks with artists that
     appeared before"""
+    max_count = round(final_count / 100.0 * rules_settings.limit_artists_percent)
+
     artists = {}
     for track in sorted_tracks:
         if track.artist in artists:
             artists[track.artist] += 1
-            score = -(artists[track.artist] ** rules_settings.limit_artists_power)
-            track.scores["post_rule_limit_artists"] = score
-            log.debug(u"Post score 'post_rule_limit_artists' to track  {0}: {1}".format(track, score))
+            if artists[track.artist] > max_count:
+                track.scores["post_rule_limit_artists"] = -1000
+                log.debug(u"Applied 'post_rule_limit_artists' to track {0}".format(track))
         else:
-            artists[track.artist] = 0
+            artists[track.artist] = 1
 
 
 def post_rule_limit_new_songs(sorted_tracks, rules_settings, final_count):
@@ -125,21 +127,22 @@ def post_rule_limit_new_songs(sorted_tracks, rules_settings, final_count):
                 track.scores["post_rule_limit_new_songs_amount"] = -1000
 
 
-def post_rule_limit_low_rating(sorted_tracks, rules_settings):
+def post_rule_limit_low_rating(sorted_tracks, rules_settings, final_count):
     """Reduce the score of tracks with low rating"""
-    power = rules_settings.limit_low_rating_power
-    low_rating = rules_settings.limit_low_rating_from
+    max_count = round(final_count / 100.0 * rules_settings.limit_low_rating_percent)
 
+    low_rating = rules_settings.limit_low_rating_from
     rule_name = "post_rule_limit_by_low_rating"
+
     rating_count = 0
 
     for track in sorted_tracks:
         rating = track.get("rating", 0)
         if low_rating >= rating > 0:
             rating_count += 1
-            score = -(rating_count ** power)
-            track.scores[rule_name] = score
-            log.debug(u"Post score '{0}', to track {1}: {2}".format(rule_name, track, score))
+            if rating_count > max_count:
+                track.scores[rule_name] = -1000
+                log.debug(u"Applied '{}' to track {}".format(rule_name, track))
 
 
 def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
@@ -153,8 +156,8 @@ def generate_playlist(lib, rules_settings, count, shuffle, input_query=""):
     run_rules(items, RULES, rules_settings)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
     log.debug(u"Running post rules")
-    post_rule_limit_low_rating(sorted_tracks, rules_settings)
-    post_rule_limit_artists(sorted_tracks, rules_settings)
+    post_rule_limit_low_rating(sorted_tracks, rules_settings, count)
+    post_rule_limit_artists(sorted_tracks, rules_settings, count)
     post_rule_limit_new_songs(sorted_tracks, rules_settings, count)
     sorted_tracks = sorted(items, key=lambda track: -sum(track.scores.values()))
 

@@ -63,14 +63,15 @@ class Rules:
         self.star_3_min_days = 21
         self.star_4_min_days = 16
         self.star_5_min_days = 14
-        self.unrated_min_days = 3
-
-        self.limit_artists_power = 3
+        self.unrated_min_days = 0
 
         self.limit_low_rating_from = 40
-        self.limit_low_rating_power = 2
+        self.limit_low_rating_percent = 30
 
+        self.limit_artists_percent = 30
         self.limit_new_songs_percent = 30
+
+        self.limit_new_albums_count = 1
 
 
 
