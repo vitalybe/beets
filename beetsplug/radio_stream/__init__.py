@@ -171,7 +171,7 @@ def playlist_by_name(name):
     print("getting playlist: " + name)
     query = _settings.playlists[name].query
     query = ignore_deleted_in_query(query)
-    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 13131313131313131313131313, True, query)
+    tracks = playlist_generator.generate_playlist(g.lib, _settings.rules, 13, True, query)
 
     return tracks
 
