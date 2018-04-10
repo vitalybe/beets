@@ -283,6 +283,7 @@ def update_rules():
         elif ruleName not in _settings.rules.__dict__:
             bad_request("rule name doesn't exist: " + ruleName)
         else:
+	    print("updating rule '{}' and saving settings".format(ruleName))
             _settings.rules.__dict__[ruleName] = new_value
             _settings.save()
 

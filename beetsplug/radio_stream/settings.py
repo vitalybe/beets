@@ -1,5 +1,6 @@
 from os import path
 import pickle
+import pprint
 
 from beets import config
 from beets import logging
@@ -40,6 +41,7 @@ class Settings:
     def save(self):
         try:
             with open(_settings_file, 'wb') as f:
+		_log.debug("saving settings to: {}".format(_settings_file))
                 pickle.dump(self, f)
         except IOError as exc:
             _log.error(u'radio-stream settings file could not be written: {0}', exc)

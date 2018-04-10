@@ -118,6 +118,7 @@ def post_rule_limit_artists(sorted_tracks, rules_settings, final_count):
 
 
 def post_rule_limit_new_songs(sorted_tracks, rules_settings, final_count):
+    log.debug("post_rule_limit_new_songs: {}%".format(rules_settings.limit_new_songs_percent))    
     max_count = round(final_count / 100.0 * rules_settings.limit_new_songs_percent)
 
     new_song_count = 0
