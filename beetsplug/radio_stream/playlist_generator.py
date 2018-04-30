@@ -18,6 +18,7 @@ import sys
 import random
 from collections import OrderedDict
 from datetime import datetime
+from sets import Set
 
 from beets import ui, logging
 from beets.plugins import BeetsPlugin
@@ -106,9 +107,14 @@ def post_rule_limit_artists(sorted_tracks, rules_settings, final_count):
     appeared before"""
     max_count = round(final_count / 100.0 * rules_settings.limit_artists_percent)
 
+    new_artists = Set([])
+    for track in sorted_tracks:
+        if track.get("rating", 0) == 0:
+            new_artists.add(track.artist)
+
     artists = {}
     for track in sorted_tracks:
-        if track.artist in artists:
+        if track.artist in artists and track.artist not in new_artists:
             artists[track.artist] += 1
             if artists[track.artist] > max_count:
                 track.scores["post_rule_limit_artists"] = -1000
